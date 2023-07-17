@@ -74,6 +74,7 @@ func (writer *Writer) Write(p *av.Packet) error {
 	} else if p.IsMetadata {
 		var err error
 		typeID = av.TAG_SCRIPTDATAAMF0
+		p = p.NewPacketData()
 		p.Data, err = amf.MetaDataReform(p.Data, amf.DEL)
 		if err != nil {
 			return err
