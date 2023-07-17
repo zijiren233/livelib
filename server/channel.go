@@ -87,7 +87,6 @@ func (c *channel) PushStart(ctx context.Context, pusher av.Reader) error {
 		}
 
 		c.cache.Write(p)
-
 		for e := c.playerList.Front(); e != nil; e = e.Next() {
 			player, ok := e.Value.(*packWriter)
 			if !ok {

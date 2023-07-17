@@ -37,7 +37,7 @@ func Server(cmd *cobra.Command, args []string) {
 	tcp := muxer.Match(cmux.Any())
 	s := server.NewRtmpServer(server.WithInitHlsPlayer(true))
 	go s.Serve(tcp)
-	if flags.Debug {
+	if flags.Dev {
 		gin.SetMode(gin.DebugMode)
 	} else {
 		gin.SetMode(gin.ReleaseMode)
@@ -91,6 +91,6 @@ func Server(cmd *cobra.Command, args []string) {
 
 func init() {
 	RootCmd.AddCommand(ServerCmd)
-	ServerCmd.Flags().StringVar(&flags.Listen, "listen", "127.0.0.1", "address to listen on")
-	ServerCmd.Flags().Uint16Var(&flags.Port, "port", 1935, "port to listen on")
+	ServerCmd.Flags().StringVarP(&flags.Listen, "listen", "l", "127.0.0.1", "address to listen on")
+	ServerCmd.Flags().Uint16VarP(&flags.Port, "port", "p", 1935, "port to listen on")
 }

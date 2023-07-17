@@ -4,6 +4,7 @@ import (
 	"container/list"
 	"context"
 	"errors"
+	"io"
 
 	"github.com/zijiren233/livelib/av"
 	"github.com/zijiren233/livelib/av/cache"
@@ -24,7 +25,10 @@ type Client struct {
 	puller *rtmp.Reader
 }
 
-func NewRtmpClient(method string) (*Client, error) {
+var ErrAlreadyDialed = errors.New("already dialed")
+var ErrMethodNotSupport = errors.New("method not support")
+
+func Dial(url string, method string) (*Client, error) {
 	if method != av.PUBLISH && method != av.PLAY {
 		return nil, ErrMethodNotSupport
 	}
@@ -35,25 +39,19 @@ func NewRtmpClient(method string) (*Client, error) {
 		c.cache = cache.NewCache()
 		c.playerList = list.New()
 	}
-	return c, nil
-}
-
-var ErrAlreadyDialed = errors.New("already dialed")
-var ErrMethodNotSupport = errors.New("method not support")
-
-func (c *Client) Dial(url string) error {
 	connClient := core.NewConnClient()
 	if err := connClient.Start(url, c.method); err != nil {
-		return err
+		return nil, err
 	}
 	c.connClient = connClient
 	switch c.method {
 	case av.PUBLISH:
 		c.pusher = rtmp.NewWriter(context.Background(), c.connClient)
+		go c.pusher.SendPacket()
 	case av.PLAY:
 		c.puller = rtmp.NewReader(context.Background(), c.connClient)
 	}
-	return nil
+	return c, nil
 }
 
 func (c *Client) Close() error {
@@ -154,9 +152,13 @@ func (c *Client) DelPlayer(e *list.Element) (a any, err error) {
 
 var ErrAlreadyInPublication = errors.New("already in publication")
 
-func (c *Client) PushStart(ctx context.Context, src av.ReadCloser) error {
+func (c *Client) PushStart(ctx context.Context, src av.Reader) error {
 	if c.method != av.PUBLISH {
 		return ErrMethodNotSupport
+	}
+
+	if c.pusher == nil {
+		return errors.New("pusher is nil")
 	}
 
 	if c.inPublication {
@@ -175,6 +177,9 @@ func (c *Client) PushStart(ctx context.Context, src av.ReadCloser) error {
 
 		p, err := src.Read()
 		if err != nil {
+			if err == io.EOF {
+				return nil
+			}
 			return err
 		}
 		if err := c.pusher.Write(p); err != nil {

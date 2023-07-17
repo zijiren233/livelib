@@ -22,5 +22,5 @@ func Execute() {
 }
 
 func init() {
-	RootCmd.PersistentFlags().BoolVar(&flags.Debug, "debug", false, "debug mode")
+	RootCmd.PersistentFlags().BoolVarP(&flags.Dev, "dev", "d", false, "debug mode")
 }

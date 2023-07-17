@@ -19,15 +19,15 @@ type Writer struct {
 }
 
 func NewWriter(ctx context.Context, conn ChunkWriter) *Writer {
-	ret := &Writer{
+	w := &Writer{
 		conn:        conn,
 		RWBaser:     av.NewRWBaser(),
 		packetQueue: make(chan *av.Packet, maxQueueNum),
 		WriteBWInfo: StaticsBW{0, 0, 0, 0, 0, 0, 0, 0},
 	}
-	ret.ctx, ret.cancel = context.WithCancel(ctx)
+	w.ctx, w.cancel = context.WithCancel(ctx)
 
-	return ret
+	return w
 }
 
 func (v *Writer) SaveStatics(streamid uint32, length uint64, isVideoFlag bool) {
@@ -111,6 +111,14 @@ func (v *Writer) Closed() bool {
 	default:
 		return false
 	}
+}
+
+func (v *Writer) Wait() {
+	<-v.ctx.Done()
+}
+
+func (v *Writer) Dont() <-chan struct{} {
+	return v.ctx.Done()
 }
 
 func (v *Writer) Close() error {

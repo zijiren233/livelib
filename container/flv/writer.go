@@ -20,7 +20,7 @@ const (
 	headerLen = 11
 )
 
-type FlvWriter struct {
+type Writer struct {
 	*av.RWBaser
 	ctx       context.Context
 	cancel    context.CancelFunc
@@ -30,30 +30,30 @@ type FlvWriter struct {
 	bufSize   int
 }
 
-type FlvWriterConf func(*FlvWriter)
+type WriterConf func(*Writer)
 
-func WithBuffer(size int) FlvWriterConf {
-	return func(flvWriter *FlvWriter) {
-		flvWriter.bufSize = size
+func WithWriterBuffer(size int) WriterConf {
+	return func(w *Writer) {
+		w.bufSize = size
 	}
 }
 
-func NewFlvWriter(ctx context.Context, w io.Writer, conf ...FlvWriterConf) *FlvWriter {
-	ret := &FlvWriter{
+func NewWriter(ctx context.Context, w io.Writer, conf ...WriterConf) *Writer {
+	writer := &Writer{
 		RWBaser:   av.NewRWBaser(),
 		headerBuf: make([]byte, headerLen),
 		bufSize:   1024,
 	}
 	for _, fc := range conf {
-		fc(ret)
+		fc(writer)
 	}
-	ret.w = bufio.NewWriterSize(w, ret.bufSize)
-	ret.ctx, ret.cancel = context.WithCancel(ctx)
+	writer.w = bufio.NewWriterSize(w, writer.bufSize)
+	writer.ctx, writer.cancel = context.WithCancel(ctx)
 
-	return ret
+	return writer
 }
 
-func (writer *FlvWriter) Write(p *av.Packet) error {
+func (writer *Writer) Write(p *av.Packet) error {
 	select {
 	case <-writer.ctx.Done():
 		return writer.ctx.Err()
@@ -103,7 +103,7 @@ func (writer *FlvWriter) Write(p *av.Packet) error {
 		return err
 	}
 
-	pio.PutI32BE(writer.headerBuf[:4], int32(preDataLen))
+	pio.PutU32BE(writer.headerBuf[:4], uint32(preDataLen))
 	if _, err := writer.w.Write(writer.headerBuf[:4]); err != nil {
 		return err
 	}
@@ -114,7 +114,7 @@ func (writer *FlvWriter) Write(p *av.Packet) error {
 	return nil
 }
 
-func (writer *FlvWriter) Closed() bool {
+func (writer *Writer) Closed() bool {
 	select {
 	case <-writer.ctx.Done():
 		return true
@@ -123,21 +123,21 @@ func (writer *FlvWriter) Closed() bool {
 	}
 }
 
-func (writer *FlvWriter) Close() error {
+func (writer *Writer) Close() error {
 	if !writer.Closed() {
 		writer.cancel()
 	}
 	return writer.ctx.Err()
 }
 
-func (writer *FlvWriter) Wait() {
+func (writer *Writer) Wait() {
 	<-writer.ctx.Done()
 }
 
-func (writer *FlvWriter) Done() <-chan struct{} {
+func (writer *Writer) Done() <-chan struct{} {
 	return writer.ctx.Done()
 }
 
-func (writer *FlvWriter) Err() error {
+func (writer *Writer) Err() error {
 	return writer.ctx.Err()
 }

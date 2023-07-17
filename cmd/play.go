@@ -19,22 +19,18 @@ var PlayCmd = &cobra.Command{
 }
 
 func Play(cmd *cobra.Command, args []string) {
-	c, err := client.NewRtmpClient(av.PLAY)
+	c, err := client.Dial(flags.Dial, av.PLAY)
 	if err != nil {
 		panic(err)
 	}
 
-	if err := c.Dial(flags.Dial); err != nil {
-		panic(err)
-	}
-
-	file, err := os.Create("test.flv")
+	file, err := os.Create(flags.FilePath)
 	if err != nil {
 		panic(err)
 	}
 	defer file.Close()
 
-	w := flv.NewFlvWriter(context.Background(), file)
+	w := flv.NewWriter(context.Background(), file)
 
 	go func() {
 		if err := c.PullStart(context.Background()); err != nil {
@@ -51,4 +47,5 @@ func Play(cmd *cobra.Command, args []string) {
 
 func init() {
 	ClientCmd.AddCommand(PlayCmd)
+	PlayCmd.Flags().StringVarP(&flags.FilePath, "file", "f", "", "flv save to filepath")
 }

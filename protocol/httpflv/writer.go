@@ -14,17 +14,17 @@ const (
 )
 
 type HttpFlvWriter struct {
-	flv         *flv.FlvWriter
+	flv         *flv.Writer
 	packetQueue chan *av.Packet
 }
 
-func NewFLVWriter(ctx context.Context, w io.Writer, conf ...flv.FlvWriterConf) *HttpFlvWriter {
-	ret := &HttpFlvWriter{
+func NewFLVWriter(ctx context.Context, w io.Writer, conf ...flv.WriterConf) *HttpFlvWriter {
+	writer := &HttpFlvWriter{
 		packetQueue: make(chan *av.Packet, maxQueueNum),
-		flv:         flv.NewFlvWriter(ctx, w, conf...),
+		flv:         flv.NewWriter(ctx, w, conf...),
 	}
 
-	return ret
+	return writer
 }
 
 func (flvWriter *HttpFlvWriter) Write(p *av.Packet) (err error) {
@@ -49,6 +49,14 @@ func (flvWriter *HttpFlvWriter) SendPacket() error {
 			}
 		}
 	}
+}
+
+func (flvWriter *HttpFlvWriter) Wait() {
+	flvWriter.flv.Wait()
+}
+
+func (flvWriter *HttpFlvWriter) Dont() <-chan struct{} {
+	return flvWriter.flv.Done()
 }
 
 func (flvWriter *HttpFlvWriter) Close() error {

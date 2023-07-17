@@ -1,7 +1,7 @@
 package flags
 
 var (
-	Debug bool
+	Dev bool
 )
 
 var (
@@ -10,5 +10,6 @@ var (
 )
 
 var (
-	Dial string
+	Dial     string
+	FilePath string
 )
