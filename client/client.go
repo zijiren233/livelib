@@ -7,7 +7,7 @@ import (
 	"io"
 
 	"github.com/zijiren233/livelib/av"
-	"github.com/zijiren233/livelib/av/cache"
+	"github.com/zijiren233/livelib/cache"
 	"github.com/zijiren233/livelib/protocol/rtmp"
 	"github.com/zijiren233/livelib/protocol/rtmp/core"
 )
@@ -19,7 +19,8 @@ type Client struct {
 	pulling, inPublication bool
 
 	playerList *list.List
-	cache      *cache.Cache
+
+	gopSize int
 
 	pusher *rtmp.Writer
 	puller *rtmp.Reader
@@ -32,11 +33,10 @@ func Dial(url string, method string) (*Client, error) {
 	if method != av.PUBLISH && method != av.PLAY {
 		return nil, ErrMethodNotSupport
 	}
-	c := &Client{method: method}
+	c := &Client{method: method, gopSize: 30}
 	switch method {
 	case av.PUBLISH:
 	case av.PLAY:
-		c.cache = cache.NewCache()
 		c.playerList = list.New()
 	}
 	connClient := core.NewConnClient()
@@ -97,6 +97,8 @@ func (c *Client) PullStart(ctx context.Context) (err error) {
 	c.pulling = true
 	defer func() { c.pulling = false }()
 
+	cache := cache.NewCache()
+
 	for {
 		select {
 		case <-ctx.Done():
@@ -109,7 +111,7 @@ func (c *Client) PullStart(ctx context.Context) (err error) {
 			return err
 		}
 
-		c.cache.Write(p)
+		cache.Write(p)
 
 		for e := c.playerList.Front(); e != nil; e = e.Next() {
 			player, ok := e.Value.(*packWriter)
@@ -118,7 +120,7 @@ func (c *Client) PullStart(ctx context.Context) (err error) {
 				continue
 			}
 			if !player.Inited() {
-				if err = c.cache.Send(player.GetWriter()); err != nil {
+				if err = cache.Send(player.GetWriter()); err != nil {
 					c.playerList.Remove(e)
 					player.GetWriter().Close()
 					continue

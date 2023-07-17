@@ -7,7 +7,7 @@ import (
 	"errors"
 
 	"github.com/zijiren233/livelib/av"
-	"github.com/zijiren233/livelib/av/cache"
+	"github.com/zijiren233/livelib/cache"
 	"github.com/zijiren233/livelib/protocol/hls"
 )
 
@@ -15,7 +15,6 @@ type channel struct {
 	channelName   string
 	inPublication bool
 	playerList    *list.List
-	cache         *cache.Cache
 
 	hlsWriter *hls.Source
 }
@@ -24,7 +23,6 @@ func newChannel(channelName string) *channel {
 	return &channel{
 		channelName: channelName,
 		playerList:  list.New(),
-		cache:       cache.NewCache(),
 	}
 }
 
@@ -74,6 +72,8 @@ func (c *channel) PushStart(ctx context.Context, pusher av.Reader) error {
 		c.inPublication = false
 	}()
 
+	cache := cache.NewCache()
+
 	for {
 		select {
 		case <-ctx.Done():
@@ -86,7 +86,8 @@ func (c *channel) PushStart(ctx context.Context, pusher av.Reader) error {
 			return err
 		}
 
-		c.cache.Write(p)
+		cache.Write(p)
+
 		for e := c.playerList.Front(); e != nil; e = e.Next() {
 			player, ok := e.Value.(*packWriter)
 			if !ok {
@@ -94,7 +95,7 @@ func (c *channel) PushStart(ctx context.Context, pusher av.Reader) error {
 				continue
 			}
 			if !player.Inited() {
-				if err = c.cache.Send(player.GetWriter()); err != nil {
+				if err = cache.Send(player.GetWriter()); err != nil {
 					c.playerList.Remove(e)
 					player.GetWriter().Close()
 					continue

@@ -27,7 +27,7 @@ var ServerCmd = &cobra.Command{
 
 func Server(cmd *cobra.Command, args []string) {
 	host := fmt.Sprintf("%s:%d", flags.Listen, flags.Port)
-	fmt.Printf("Run on tcp://%s\nWebAPI: http://%s/:app/*channel\n", host, host)
+	fmt.Printf("Run on tcp://%s\nRtmp: rtmp://%s/{app}/{channel}\nWebAPI: http://%s/{app}/{channel}\n", host, host, host)
 	listener, err := net.Listen("tcp", host)
 	if err != nil {
 		log.Panic(err)
