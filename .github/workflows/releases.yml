@@ -1,0 +1,34 @@
+name: Releases
+
+on:
+    workflow_dispatch:
+
+jobs:
+    releases:
+        runs-on: ubuntu-latest
+
+        steps:
+            - uses: actions/checkout@v3
+
+            - name: Build
+              uses: crazy-max/ghaction-xgo@v2
+              with:
+                  xgo_version: latest
+                  go_version: 1.19
+                  dest: build
+                  targets: linux/arm64,linux/amd64,windows/amd64,darwin/amd64,darwin/arm64
+                  v: false
+                  x: false
+                  race: false
+                  ldflags: -s -w
+                  buildmode: default
+                  trimpath: true
+
+            - uses: "marvinpinto/action-automatic-releases@latest"
+              with:
+                  repo_token: "${{ secrets.GITHUB_TOKEN }}"
+                  automatic_release_tag: "latest"
+                  title: Latest
+                  prerelease: false
+                  files: |
+                    build/github.com/zijiren233/*
