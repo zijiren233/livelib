@@ -57,6 +57,10 @@ func NewRtmpServer(c ...ServerConf) *Server {
 	return s
 }
 
+func (s *Server) SetParseChannelFunc(f parseChannelFunc) {
+	s.parseChannelFunc = f
+}
+
 func (s *Server) GetOrNewApp(appName string) *app {
 	s.appsLock.Lock(appName)
 	defer s.appsLock.Unlock(appName)
