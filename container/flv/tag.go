@@ -142,10 +142,12 @@ func (tag *Tag) ParseMediaTagHeader(b []byte, isVideo bool) (n int, err error) {
 	return
 }
 
+var ErrInvalidAudioData = fmt.Errorf("invalid audio data")
+var ErrInvalidVideoData = fmt.Errorf("invalid video data")
+
 func (tag *Tag) parseAudioHeader(b []byte) (n int, err error) {
-	if len(b) < n+1 {
-		err = fmt.Errorf("invalid audiodata len=%d", len(b))
-		return
+	if len(b) < 1 {
+		return 0, ErrInvalidAudioData
 	}
 	flags := b[0]
 	tag.mediat.soundFormat = flags >> 4
@@ -155,6 +157,9 @@ func (tag *Tag) parseAudioHeader(b []byte) (n int, err error) {
 	n++
 	switch tag.mediat.soundFormat {
 	case av.SOUND_AAC:
+		if len(b) < 2 {
+			return 1, ErrInvalidAudioData
+		}
 		tag.mediat.aacPacketType = b[1]
 		n++
 	}
@@ -162,15 +167,17 @@ func (tag *Tag) parseAudioHeader(b []byte) (n int, err error) {
 }
 
 func (tag *Tag) parseVideoHeader(b []byte) (n int, err error) {
-	if len(b) < n+5 {
-		err = fmt.Errorf("invalid videodata len=%d", len(b))
-		return
+	if len(b) < 1 {
+		return 0, ErrInvalidVideoData
 	}
 	flags := b[0]
 	tag.mediat.frameType = flags >> 4
 	tag.mediat.codecID = flags & 0xf
 	n++
 	if tag.mediat.frameType == av.FRAME_INTER || tag.mediat.frameType == av.FRAME_KEY {
+		if len(b) < 5 {
+			return 1, ErrInvalidVideoData
+		}
 		tag.mediat.avcPacketType = b[1]
 		for i := 2; i < 5; i++ {
 			tag.mediat.compositionTime = tag.mediat.compositionTime<<8 + int32(b[i])

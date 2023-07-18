@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"sync"
 	"time"
 
 	"github.com/zijiren233/livelib/av"
@@ -37,6 +38,9 @@ type Source struct {
 
 	ctx    context.Context
 	cancel context.CancelFunc
+
+	closed bool
+	lock   *sync.RWMutex
 }
 
 func NewSource(ctx context.Context) *Source {
@@ -51,6 +55,7 @@ func NewSource(ctx context.Context) *Source {
 		tsparser:    parser.NewCodecParser(),
 		bwriter:     bytes.NewBuffer(make([]byte, 100*1024)),
 		packetQueue: make(chan *av.Packet, maxQueueNum),
+		lock:        new(sync.RWMutex),
 	}
 	s.ctx, s.cancel = context.WithCancel(ctx)
 	return s
@@ -61,6 +66,13 @@ func (source *Source) GetCacheInc() *TSCacheItem {
 }
 
 func (source *Source) Write(p *av.Packet) (err error) {
+	source.lock.RLock()
+	defer source.lock.RUnlock()
+
+	if source.closed {
+		return av.ErrChannelClosed
+	}
+
 	select {
 	case <-source.ctx.Done():
 		return source.ctx.Err()
@@ -75,15 +87,13 @@ func (source *Source) SendPacket(ClearCacheWhenClosed bool) error {
 	var p *av.Packet
 	var ok bool
 	for {
-		select {
-		case <-source.ctx.Done():
-			if !ClearCacheWhenClosed || len(source.packetQueue) == 0 {
-				return nil
-			}
+		if ClearCacheWhenClosed {
 			p, ok = <-source.packetQueue
-		case p, ok = <-source.packetQueue:
-			if !ClearCacheWhenClosed {
+		} else {
+			select {
+			case <-source.ctx.Done():
 				return nil
+			case p, ok = <-source.packetQueue:
 			}
 		}
 		if !ok {
@@ -95,7 +105,6 @@ func (source *Source) SendPacket(ClearCacheWhenClosed bool) error {
 		p = p.NewPacketData()
 		err := source.demuxer.Demux(p)
 		if err != nil {
-			fmt.Printf("err: %v\n", err)
 			if err == flv.ErrAvcEndSEQ {
 				continue
 			}
@@ -122,19 +131,20 @@ func (source *Source) cleanup() {
 }
 
 func (source *Source) Close() error {
-	source.cancel()
-	source.cleanup()
-	close(source.packetQueue)
+	source.lock.Lock()
+	defer source.lock.Unlock()
+	if !source.Closed() {
+		source.cancel()
+		source.cleanup()
+		close(source.packetQueue)
+	}
 	return source.ctx.Err()
 }
 
 func (source *Source) Closed() bool {
-	select {
-	case <-source.ctx.Done():
-		return true
-	default:
-		return false
-	}
+	source.lock.RLock()
+	defer source.lock.RUnlock()
+	return source.closed
 }
 
 func (source *Source) cut() {

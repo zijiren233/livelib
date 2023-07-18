@@ -125,8 +125,8 @@ func (c *channel) DelPlayer(e *list.Element) any {
 func (c *channel) InitHlsPlayer() {
 	if c.hlsWriter == nil || c.hlsWriter.Closed() {
 		c.hlsWriter = hls.NewSource(context.Background())
-		c.AddPlayer(c.hlsWriter)
 		go c.hlsWriter.SendPacket(true)
+		c.AddPlayer(c.hlsWriter)
 	}
 }
 

@@ -1,5 +1,9 @@
 package av
 
+import "errors"
+
+var ErrChannelClosed = errors.New("channel closed")
+
 // Header can be converted to AudioHeaderInfo or VideoHeaderInfo
 type Packet struct {
 	IsAudio    bool

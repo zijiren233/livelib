@@ -7,7 +7,7 @@ require (
 	github.com/gin-gonic/gin v1.9.1
 	github.com/soheilhy/cmux v0.1.5
 	github.com/spf13/cobra v1.7.0
-	github.com/zijiren233/ksync v0.1.0
+	github.com/zijiren233/ksync v0.1.1
 )
 
 require (

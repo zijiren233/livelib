@@ -38,16 +38,16 @@ func (a *array) write(packet *av.Packet) error {
 	}
 	if IsKeyFrame {
 		a.reset()
+		a.isComplete = true
 	}
 	a.packets = append(a.packets, packet)
 	return nil
 }
 
 func (a *array) send(w av.WriteCloser) error {
-	// if !a.isComplete {
-	//     fmt.Println("not complete")
-	//     return nil
-	// }
+	if !a.isComplete {
+		return nil
+	}
 	for _, packet := range a.packets {
 		if err := w.Write(packet); err != nil {
 			return err
