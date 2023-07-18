@@ -60,7 +60,7 @@ func Server(cmd *cobra.Command, args []string) {
 		}
 		switch fileExt {
 		case ".flv":
-			w := httpflv.NewFLVWriter(c, c.Writer)
+			w := httpflv.NewHttpFLVWriter(c, c.Writer)
 			defer w.Close()
 			channel.AddPlayer(w)
 			w.SendPacket(true)

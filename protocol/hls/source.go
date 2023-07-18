@@ -38,8 +38,6 @@ type Source struct {
 
 	ctx    context.Context
 	cancel context.CancelFunc
-
-	closed bool
 	lock   *sync.RWMutex
 }
 
@@ -67,18 +65,23 @@ func (source *Source) GetCacheInc() *TSCacheItem {
 
 func (source *Source) Write(p *av.Packet) (err error) {
 	source.lock.RLock()
-	defer source.lock.RUnlock()
 
-	if source.closed {
+	if source.closed() {
+		source.lock.RUnlock()
 		return av.ErrChannelClosed
 	}
 
 	select {
 	case <-source.ctx.Done():
+		source.lock.RUnlock()
 		return source.ctx.Err()
 	case source.packetQueue <- p:
+		source.lock.RUnlock()
 	default:
+		source.lock.RUnlock()
+		source.lock.Lock()
 		av.DropPacket(source.packetQueue)
+		source.lock.Unlock()
 	}
 	return
 }
@@ -88,7 +91,13 @@ func (source *Source) SendPacket(ClearCacheWhenClosed bool) error {
 	var ok bool
 	for {
 		if ClearCacheWhenClosed {
+			source.lock.RLock()
+			if source.closed() && len(source.packetQueue) == 0 {
+				source.lock.RUnlock()
+				return nil
+			}
 			p, ok = <-source.packetQueue
+			source.lock.RUnlock()
 		} else {
 			select {
 			case <-source.ctx.Done():
@@ -133,18 +142,33 @@ func (source *Source) cleanup() {
 func (source *Source) Close() error {
 	source.lock.Lock()
 	defer source.lock.Unlock()
-	if !source.Closed() {
-		source.cancel()
-		source.cleanup()
-		close(source.packetQueue)
+	if source.closed() {
+		return source.ctx.Err()
 	}
+	source.cancel()
+	source.cleanup()
+	close(source.packetQueue)
+	source.cancel()
 	return source.ctx.Err()
 }
 
 func (source *Source) Closed() bool {
 	source.lock.RLock()
 	defer source.lock.RUnlock()
-	return source.closed
+	return source.closed()
+}
+
+func (source *Source) closed() bool {
+	select {
+	case <-source.ctx.Done():
+		return true
+	default:
+		return false
+	}
+}
+
+func (source *Source) Wait() {
+	<-source.ctx.Done()
 }
 
 func (source *Source) cut() {

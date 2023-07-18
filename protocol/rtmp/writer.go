@@ -11,16 +11,14 @@ import (
 )
 
 type Writer struct {
-	ctx    context.Context
-	cancel context.CancelFunc
 	*av.RWBaser
 	conn        ChunkWriter
 	packetQueue chan *av.Packet
 	WriteBWInfo StaticsBW
 
-	closed bool
-
-	lock *sync.RWMutex
+	ctx    context.Context
+	cancel context.CancelFunc
+	lock   *sync.RWMutex
 }
 
 func NewWriter(ctx context.Context, conn ChunkWriter) *Writer {
@@ -62,20 +60,24 @@ func (w *Writer) SaveStatics(streamid uint32, length uint64, isVideoFlag bool) {
 
 func (w *Writer) Write(p *av.Packet) (err error) {
 	w.lock.RLock()
-	defer w.lock.RUnlock()
 
-	if w.closed {
+	if w.closed() {
+		w.lock.RUnlock()
 		return av.ErrChannelClosed
 	}
 
 	select {
 	case <-w.ctx.Done():
+		w.lock.RUnlock()
 		return w.ctx.Err()
 	case w.packetQueue <- p:
+		w.lock.RUnlock()
 	default:
+		w.lock.RUnlock()
+		w.lock.Lock()
 		av.DropPacket(w.packetQueue)
+		w.lock.Unlock()
 	}
-
 	return
 }
 
@@ -86,7 +88,13 @@ func (w *Writer) SendPacket(ClearCacheWhenClosed bool) error {
 	var ok bool
 	for {
 		if ClearCacheWhenClosed {
+			w.lock.RLock()
+			if w.closed() && len(w.packetQueue) == 0 {
+				w.lock.RUnlock()
+				return nil
+			}
 			p, ok = <-w.packetQueue
+			w.lock.RUnlock()
 		} else {
 			select {
 			case <-w.ctx.Done():
@@ -125,7 +133,16 @@ func (w *Writer) SendPacket(ClearCacheWhenClosed bool) error {
 func (w *Writer) Closed() bool {
 	w.lock.RLock()
 	defer w.lock.RUnlock()
-	return w.closed
+	return w.closed()
+}
+
+func (w *Writer) closed() bool {
+	select {
+	case <-w.ctx.Done():
+		return true
+	default:
+		return false
+	}
 }
 
 func (w *Writer) Wait() {
@@ -139,9 +156,10 @@ func (w *Writer) Dont() <-chan struct{} {
 func (w *Writer) Close() error {
 	w.lock.Lock()
 	defer w.lock.Unlock()
-	if !w.Closed() {
-		w.cancel()
-		close(w.packetQueue)
+	if w.closed() {
+		return w.ctx.Err()
 	}
+	w.cancel()
+	close(w.packetQueue)
 	return nil
 }

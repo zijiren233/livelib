@@ -3,7 +3,9 @@ package flv
 import (
 	"bufio"
 	"context"
+	"errors"
 	"io"
+	"sync"
 
 	"github.com/zijiren233/livelib/av"
 	"github.com/zijiren233/livelib/protocol/amf"
@@ -22,12 +24,14 @@ const (
 
 type Writer struct {
 	*av.RWBaser
-	ctx       context.Context
-	cancel    context.CancelFunc
 	headerBuf []byte
 	w         *bufio.Writer
 	inited    bool
 	bufSize   int
+
+	ctx    context.Context
+	cancel context.CancelFunc
+	lock   *sync.RWMutex
 }
 
 type WriterConf func(*Writer)
@@ -43,28 +47,32 @@ func NewWriter(ctx context.Context, w io.Writer, conf ...WriterConf) *Writer {
 		RWBaser:   av.NewRWBaser(),
 		headerBuf: make([]byte, headerLen),
 		bufSize:   1024,
+		lock:      new(sync.RWMutex),
 	}
+
 	for _, fc := range conf {
 		fc(writer)
 	}
-	writer.w = bufio.NewWriterSize(w, writer.bufSize)
+
 	writer.ctx, writer.cancel = context.WithCancel(ctx)
+	writer.w = bufio.NewWriterSize(w, writer.bufSize)
 
 	return writer
 }
 
-func (writer *Writer) Write(p *av.Packet) error {
-	select {
-	case <-writer.ctx.Done():
-		return writer.ctx.Err()
-	default:
+func (w *Writer) Write(p *av.Packet) error {
+	w.lock.RLock()
+	if w.closed() {
+		w.lock.RUnlock()
+		return errors.New("flv writer closed")
 	}
-	if !writer.inited {
-		_, err := writer.w.Write(FlvFirstHeader)
+	w.lock.RUnlock()
+	if !w.inited {
+		_, err := w.w.Write(FlvFirstHeader)
 		if err != nil {
 			return err
 		}
-		writer.inited = true
+		w.inited = true
 	}
 
 	var typeID int
@@ -85,60 +93,61 @@ func (writer *Writer) Write(p *av.Packet) error {
 		return nil
 	}
 	dataLen := len(p.Data)
-	timestamp := p.TimeStamp + writer.BaseTimeStamp()
-	writer.RWBaser.RecTimeStamp(timestamp, uint32(typeID))
+	timestamp := p.TimeStamp + w.BaseTimeStamp()
+	w.RWBaser.RecTimeStamp(timestamp, uint32(typeID))
 
 	preDataLen := dataLen + headerLen
 	timestampExt := timestamp >> 24
 
-	pio.PutU8(writer.headerBuf[0:1], uint8(typeID))
-	pio.PutU24BE(writer.headerBuf[1:4], uint32(dataLen))
-	pio.PutU24BE(writer.headerBuf[4:7], uint32(timestamp))
-	pio.PutU8(writer.headerBuf[7:8], uint8(timestampExt))
+	pio.PutU8(w.headerBuf[0:1], uint8(typeID))
+	pio.PutU24BE(w.headerBuf[1:4], uint32(dataLen))
+	pio.PutU24BE(w.headerBuf[4:7], uint32(timestamp))
+	pio.PutU8(w.headerBuf[7:8], uint8(timestampExt))
 
-	if _, err := writer.w.Write(writer.headerBuf); err != nil {
+	if _, err := w.w.Write(w.headerBuf); err != nil {
 		return err
 	}
 
-	if _, err := writer.w.Write(p.Data); err != nil {
+	if _, err := w.w.Write(p.Data); err != nil {
 		return err
 	}
 
-	pio.PutU32BE(writer.headerBuf[:4], uint32(preDataLen))
-	if _, err := writer.w.Write(writer.headerBuf[:4]); err != nil {
+	pio.PutU32BE(w.headerBuf[:4], uint32(preDataLen))
+	if _, err := w.w.Write(w.headerBuf[:4]); err != nil {
 		return err
 	}
-	if err := writer.w.Flush(); err != nil {
+	if err := w.w.Flush(); err != nil {
 		return err
 	}
 
 	return nil
 }
 
-func (writer *Writer) Closed() bool {
+func (w *Writer) Closed() bool {
+	w.lock.RLock()
+	defer w.lock.RUnlock()
+	return w.closed()
+}
+
+func (w *Writer) closed() bool {
 	select {
-	case <-writer.ctx.Done():
+	case <-w.ctx.Done():
 		return true
 	default:
 		return false
 	}
 }
 
-func (writer *Writer) Close() error {
-	if !writer.Closed() {
-		writer.cancel()
+func (w *Writer) Close() error {
+	w.lock.Lock()
+	defer w.lock.Unlock()
+	if w.closed() {
+		return errors.New("Closed")
 	}
-	return writer.ctx.Err()
+	w.cancel()
+	return nil
 }
 
-func (writer *Writer) Wait() {
-	<-writer.ctx.Done()
-}
-
-func (writer *Writer) Done() <-chan struct{} {
-	return writer.ctx.Done()
-}
-
-func (writer *Writer) Err() error {
-	return writer.ctx.Err()
+func (w *Writer) Wait() {
+	<-w.ctx.Done()
 }
