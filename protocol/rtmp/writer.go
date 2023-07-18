@@ -66,41 +66,48 @@ func (v *Writer) Write(p *av.Packet) (err error) {
 	return
 }
 
-func (v *Writer) SendPacket() error {
-	Flush := reflect.ValueOf(v.conn).MethodByName("Flush")
+func (w *Writer) SendPacket(ClearCacheWhenClosed bool) error {
+	Flush := reflect.ValueOf(w.conn).MethodByName("Flush")
 	var cs = new(core.ChunkStream)
+	var p *av.Packet
+	var ok bool
 	for {
 		select {
-		case <-v.ctx.Done():
-			return v.ctx.Err()
-		case p, ok := <-v.packetQueue:
-			if !ok {
+		case <-w.ctx.Done():
+			if !ClearCacheWhenClosed || len(w.packetQueue) == 0 {
 				return nil
 			}
-			cs.Data = p.Data
-			cs.Length = uint32(len(p.Data))
-			cs.StreamID = p.StreamID
-			cs.Timestamp = p.TimeStamp
-			cs.Timestamp += v.BaseTimeStamp()
-
-			if p.IsVideo {
-				cs.TypeID = av.TAG_VIDEO
-			} else {
-				if p.IsMetadata {
-					cs.TypeID = av.TAG_SCRIPTDATAAMF0
-				} else {
-					cs.TypeID = av.TAG_AUDIO
-				}
+			p, ok = <-w.packetQueue
+		case p, ok = <-w.packetQueue:
+			if !ClearCacheWhenClosed {
+				return nil
 			}
-
-			v.SaveStatics(p.StreamID, uint64(cs.Length), p.IsVideo)
-			v.RecTimeStamp(cs.Timestamp, cs.TypeID)
-			err := v.conn.Write(cs)
-			if err != nil {
-				return err
-			}
-			Flush.Call(nil)
 		}
+		if !ok {
+			return nil
+		}
+		cs.Data = p.Data
+		cs.Length = uint32(len(p.Data))
+		cs.StreamID = p.StreamID
+		cs.Timestamp = p.TimeStamp
+		cs.Timestamp += w.BaseTimeStamp()
+
+		if p.IsVideo {
+			cs.TypeID = av.TAG_VIDEO
+		} else {
+			if p.IsMetadata {
+				cs.TypeID = av.TAG_SCRIPTDATAAMF0
+			} else {
+				cs.TypeID = av.TAG_AUDIO
+			}
+		}
+
+		w.SaveStatics(p.StreamID, uint64(cs.Length), p.IsVideo)
+		w.RecTimeStamp(cs.Timestamp, cs.TypeID)
+		if err := w.conn.Write(cs); err != nil {
+			return err
+		}
+		Flush.Call(nil)
 	}
 }
 
@@ -123,8 +130,7 @@ func (v *Writer) Dont() <-chan struct{} {
 
 func (v *Writer) Close() error {
 	if !v.Closed() {
-		close(v.packetQueue)
 		v.cancel()
 	}
-	return v.ctx.Err()
+	return nil
 }

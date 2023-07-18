@@ -71,34 +71,45 @@ func (source *Source) Write(p *av.Packet) (err error) {
 	return
 }
 
-func (source *Source) SendPacket() error {
+func (source *Source) SendPacket(ClearCacheWhenClosed bool) error {
+	var p *av.Packet
+	var ok bool
 	for {
 		select {
 		case <-source.ctx.Done():
-			return source.ctx.Err()
-		case p := <-source.packetQueue:
-			if p.IsMetadata {
+			if !ClearCacheWhenClosed || len(source.packetQueue) == 0 {
+				return nil
+			}
+			p, ok = <-source.packetQueue
+		case p, ok = <-source.packetQueue:
+			if !ClearCacheWhenClosed {
+				return nil
+			}
+		}
+		if !ok {
+			return nil
+		}
+		if p.IsMetadata {
+			continue
+		}
+		p = p.NewPacketData()
+		err := source.demuxer.Demux(p)
+		if err != nil {
+			fmt.Printf("err: %v\n", err)
+			if err == flv.ErrAvcEndSEQ {
 				continue
 			}
-			p = p.NewPacketData()
-			err := source.demuxer.Demux(p)
-			if err != nil {
-				fmt.Printf("err: %v\n", err)
-				if err == flv.ErrAvcEndSEQ {
-					continue
-				}
-				return err
-			}
+			return err
+		}
 
-			compositionTime, isSeq, err := source.parse(p)
-			if err != nil || isSeq {
-				continue
-			}
-			if source.btswriter != nil {
-				source.stat.update(p.IsVideo, p.TimeStamp)
-				source.calcPtsDts(p.IsVideo, p.TimeStamp, uint32(compositionTime))
-				source.tsMux(p)
-			}
+		compositionTime, isSeq, err := source.parse(p)
+		if err != nil || isSeq {
+			continue
+		}
+		if source.btswriter != nil {
+			source.stat.update(p.IsVideo, p.TimeStamp)
+			source.calcPtsDts(p.IsVideo, p.TimeStamp, uint32(compositionTime))
+			source.tsMux(p)
 		}
 	}
 }

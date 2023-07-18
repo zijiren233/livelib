@@ -63,7 +63,7 @@ func Server(cmd *cobra.Command, args []string) {
 			w := httpflv.NewFLVWriter(c, c.Writer)
 			defer w.Close()
 			channel.AddPlayer(w)
-			w.SendPacket()
+			w.SendPacket(true)
 		case ".m3u8":
 			b, err := channel.GenM3U8PlayList(fmt.Sprintf("/%s/%s", appName, channelName))
 			if err != nil {

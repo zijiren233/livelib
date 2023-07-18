@@ -149,7 +149,7 @@ func (s *Server) handleConn(conn *core.Conn) (err error) {
 		writer := rtmp.NewWriter(context.Background(), connServer)
 		defer writer.Close()
 		channel.AddPlayer(writer)
-		writer.SendPacket()
+		writer.SendPacket(true)
 	}
 
 	return

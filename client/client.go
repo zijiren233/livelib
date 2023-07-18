@@ -4,7 +4,6 @@ import (
 	"container/list"
 	"context"
 	"errors"
-	"io"
 
 	"github.com/zijiren233/livelib/av"
 	"github.com/zijiren233/livelib/cache"
@@ -21,9 +20,6 @@ type Client struct {
 	playerList *list.List
 
 	gopSize int
-
-	pusher *rtmp.Writer
-	puller *rtmp.Reader
 }
 
 var ErrAlreadyDialed = errors.New("already dialed")
@@ -44,13 +40,6 @@ func Dial(url string, method string) (*Client, error) {
 		return nil, err
 	}
 	c.connClient = connClient
-	switch c.method {
-	case av.PUBLISH:
-		c.pusher = rtmp.NewWriter(context.Background(), c.connClient)
-		go c.pusher.SendPacket()
-	case av.PLAY:
-		c.puller = rtmp.NewReader(context.Background(), c.connClient)
-	}
 	return c, nil
 }
 
@@ -99,6 +88,8 @@ func (c *Client) PullStart(ctx context.Context) (err error) {
 
 	cache := cache.NewCache()
 
+	puller := rtmp.NewReader(ctx, c.connClient)
+
 	for {
 		select {
 		case <-ctx.Done():
@@ -106,7 +97,7 @@ func (c *Client) PullStart(ctx context.Context) (err error) {
 		default:
 		}
 
-		p, err := c.puller.Read()
+		p, err := puller.Read()
 		if err != nil {
 			return err
 		}
@@ -159,10 +150,6 @@ func (c *Client) PushStart(ctx context.Context, src av.Reader) error {
 		return ErrMethodNotSupport
 	}
 
-	if c.pusher == nil {
-		return errors.New("pusher is nil")
-	}
-
 	if c.inPublication {
 		return ErrAlreadyInPublication
 	}
@@ -170,22 +157,27 @@ func (c *Client) PushStart(ctx context.Context, src av.Reader) error {
 	c.inPublication = true
 	defer func() { c.inPublication = false }()
 
-	for {
-		select {
-		case <-ctx.Done():
-			return ctx.Err()
-		default:
-		}
+	ctx, cancel := context.WithCancel(ctx)
 
-		p, err := src.Read()
-		if err != nil {
-			if err == io.EOF {
-				return nil
+	pusher := rtmp.NewWriter(ctx, c.connClient)
+
+	go func() {
+		defer cancel()
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			default:
 			}
-			return err
+
+			p, err := src.Read()
+			if err != nil {
+				return
+			}
+			if err := pusher.Write(p); err != nil {
+				return
+			}
 		}
-		if err := c.pusher.Write(p); err != nil {
-			return err
-		}
-	}
+	}()
+	return pusher.SendPacket(true)
 }

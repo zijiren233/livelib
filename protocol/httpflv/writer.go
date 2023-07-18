@@ -38,31 +38,45 @@ func (flvWriter *HttpFlvWriter) Write(p *av.Packet) (err error) {
 	return
 }
 
-func (flvWriter *HttpFlvWriter) SendPacket() error {
+func (w *HttpFlvWriter) SendPacket(ClearCacheWhenClosed bool) error {
+	var p *av.Packet
+	var ok bool
 	for {
 		select {
-		case <-flvWriter.flv.Done():
-			return flvWriter.flv.Err()
-		case p := <-flvWriter.packetQueue:
-			if err := flvWriter.flv.Write(p); err != nil {
-				return err
+		case <-w.flv.Done():
+			if !ClearCacheWhenClosed || len(w.packetQueue) == 0 {
+				return nil
 			}
+			p, ok = <-w.packetQueue
+		case p, ok = <-w.packetQueue:
+			if !ClearCacheWhenClosed {
+				return nil
+			}
+		}
+		if !ok {
+			return nil
+		}
+		if err := w.flv.Write(p); err != nil {
+			return err
 		}
 	}
 }
 
-func (flvWriter *HttpFlvWriter) Wait() {
-	flvWriter.flv.Wait()
+func (w *HttpFlvWriter) Wait() {
+	w.flv.Wait()
 }
 
-func (flvWriter *HttpFlvWriter) Dont() <-chan struct{} {
-	return flvWriter.flv.Done()
+func (w *HttpFlvWriter) Dont() <-chan struct{} {
+	return w.flv.Done()
 }
 
-func (flvWriter *HttpFlvWriter) Close() error {
-	return flvWriter.flv.Close()
+func (w *HttpFlvWriter) Close() error {
+	if !w.flv.Closed() {
+		w.flv.Close()
+	}
+	return nil
 }
 
-func (flvWriter *HttpFlvWriter) Closed() bool {
-	return flvWriter.flv.Closed()
+func (w *HttpFlvWriter) Closed() bool {
+	return w.flv.Closed()
 }

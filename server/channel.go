@@ -126,7 +126,7 @@ func (c *channel) InitHlsPlayer() {
 	if c.hlsWriter == nil || c.hlsWriter.Closed() {
 		c.hlsWriter = hls.NewSource(context.Background())
 		c.AddPlayer(c.hlsWriter)
-		go c.hlsWriter.SendPacket()
+		go c.hlsWriter.SendPacket(true)
 	}
 }
 
