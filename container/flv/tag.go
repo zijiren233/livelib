@@ -6,11 +6,13 @@ import (
 	"github.com/zijiren233/livelib/av"
 )
 
-type flvTag struct {
-	fType     uint8
-	dataSize  uint32
-	timeStamp uint32
-	streamID  uint32 // always 0
+type FlvTagHeader struct {
+	TagType           uint8
+	DataSize          uint32
+	Timestamp         uint32
+	TimestampExtended uint8
+	StreamID          uint32
+	PreTagSzie        uint32
 }
 
 type mediaTag struct {
@@ -101,38 +103,37 @@ type mediaTag struct {
 	compositionTime int32
 }
 
-type Tag struct {
-	flvt   flvTag
+type FlvTagBody struct {
 	mediat mediaTag
 }
 
-func (tag *Tag) SoundFormat() uint8 {
+func (tag *FlvTagBody) SoundFormat() uint8 {
 	return tag.mediat.soundFormat
 }
 
-func (tag *Tag) AACPacketType() uint8 {
+func (tag *FlvTagBody) AACPacketType() uint8 {
 	return tag.mediat.aacPacketType
 }
 
-func (tag *Tag) IsKeyFrame() bool {
+func (tag *FlvTagBody) IsKeyFrame() bool {
 	return tag.mediat.frameType == av.FRAME_KEY
 }
 
-func (tag *Tag) IsSeq() bool {
+func (tag *FlvTagBody) IsSeq() bool {
 	return tag.mediat.frameType == av.FRAME_KEY &&
 		tag.mediat.avcPacketType == av.AVC_SEQHDR
 }
 
-func (tag *Tag) CodecID() uint8 {
+func (tag *FlvTagBody) CodecID() uint8 {
 	return tag.mediat.codecID
 }
 
-func (tag *Tag) CompositionTime() int32 {
+func (tag *FlvTagBody) CompositionTime() int32 {
 	return tag.mediat.compositionTime
 }
 
 // ParseMediaTagHeader, parse video, audio, tag header
-func (tag *Tag) ParseMediaTagHeader(b []byte, isVideo bool) (n int, err error) {
+func (tag *FlvTagBody) ParseMediaTagHeader(b []byte, isVideo bool) (n int, err error) {
 	switch isVideo {
 	case false:
 		n, err = tag.parseAudioHeader(b)
@@ -145,7 +146,7 @@ func (tag *Tag) ParseMediaTagHeader(b []byte, isVideo bool) (n int, err error) {
 var ErrInvalidAudioData = fmt.Errorf("invalid audio data")
 var ErrInvalidVideoData = fmt.Errorf("invalid video data")
 
-func (tag *Tag) parseAudioHeader(b []byte) (n int, err error) {
+func (tag *FlvTagBody) parseAudioHeader(b []byte) (n int, err error) {
 	if len(b) < 1 {
 		return 0, ErrInvalidAudioData
 	}
@@ -166,23 +167,27 @@ func (tag *Tag) parseAudioHeader(b []byte) (n int, err error) {
 	return
 }
 
-func (tag *Tag) parseVideoHeader(b []byte) (n int, err error) {
+func (tag *FlvTagBody) parseVideoHeader(b []byte) (n int, err error) {
 	if len(b) < 1 {
 		return 0, ErrInvalidVideoData
 	}
 	flags := b[0]
 	tag.mediat.frameType = flags >> 4
-	tag.mediat.codecID = flags & 0xf
+	tag.mediat.codecID = flags & 0x0f
 	n++
 	if tag.mediat.frameType == av.FRAME_INTER || tag.mediat.frameType == av.FRAME_KEY {
-		if len(b) < 5 {
-			return 1, ErrInvalidVideoData
+		switch tag.mediat.codecID {
+		case av.CODEC_AVC:
+			if len(b) < 5 {
+				return 1, ErrInvalidVideoData
+			}
+			tag.mediat.avcPacketType = b[1]
+			n++
+			for _, v := range b[2:5] {
+				tag.mediat.compositionTime = tag.mediat.compositionTime<<8 + int32(v)
+				n++
+			}
 		}
-		tag.mediat.avcPacketType = b[1]
-		for i := 2; i < 5; i++ {
-			tag.mediat.compositionTime = tag.mediat.compositionTime<<8 + int32(b[i])
-		}
-		n += 4
 	}
 	return
 }

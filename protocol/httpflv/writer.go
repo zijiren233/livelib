@@ -1,7 +1,6 @@
 package httpflv
 
 import (
-	"bufio"
 	"context"
 	"errors"
 	"io"
@@ -10,7 +9,7 @@ import (
 	"github.com/zijiren233/livelib/av"
 	"github.com/zijiren233/livelib/container/flv"
 	"github.com/zijiren233/livelib/protocol/amf"
-	"github.com/zijiren233/livelib/utils/pio"
+	"github.com/zijiren233/stream"
 )
 
 const (
@@ -21,7 +20,7 @@ const (
 type HttpFlvWriter struct {
 	*av.RWBaser
 	headerBuf []byte
-	w         *bufio.Writer
+	w         *stream.Writer
 	inited    bool
 	bufSize   int
 
@@ -54,7 +53,7 @@ func NewHttpFLVWriter(ctx context.Context, w io.Writer, conf ...HttpFlvWriterCon
 	}
 
 	writer.ctx, writer.cancel = context.WithCancel(ctx)
-	writer.w = bufio.NewWriterSize(w, writer.bufSize)
+	writer.w = stream.NewWriter(w, stream.WithWriterBufferSize(writer.bufSize))
 
 	return writer
 }
@@ -86,17 +85,21 @@ func (w *HttpFlvWriter) SendPacket(ClearCacheWhenClosed bool) error {
 	var p *av.Packet
 	var ok bool
 	for {
-		if ClearCacheWhenClosed {
-			w.lock.RLock()
-			if w.closed() && len(w.packetQueue) == 0 {
+		w.lock.RLock()
+		if w.closed() {
+			if len(w.packetQueue) == 0 {
 				w.lock.RUnlock()
 				return nil
 			}
 			p, ok = <-w.packetQueue
 			w.lock.RUnlock()
 		} else {
+			w.lock.RUnlock()
 			select {
 			case <-w.ctx.Done():
+				if ClearCacheWhenClosed {
+					continue
+				}
 				return nil
 			case p, ok = <-w.packetQueue:
 			}
@@ -105,14 +108,13 @@ func (w *HttpFlvWriter) SendPacket(ClearCacheWhenClosed bool) error {
 			return nil
 		}
 		if !w.inited {
-			_, err := w.w.Write(flv.FlvFirstHeader)
-			if err != nil {
+			if err := w.w.Bytes(flv.FlvFirstHeader).Error(); err != nil {
 				return err
 			}
 			w.inited = true
 		}
 
-		var typeID int
+		var typeID uint8
 
 		if p.IsVideo {
 			typeID = av.TAG_VIDEO
@@ -136,24 +138,14 @@ func (w *HttpFlvWriter) SendPacket(ClearCacheWhenClosed bool) error {
 		preDataLen := dataLen + headerLen
 		timestampExt := timestamp >> 24
 
-		pio.PutU8(w.headerBuf[0:1], uint8(typeID))
-		pio.PutU24BE(w.headerBuf[1:4], uint32(dataLen))
-		pio.PutU24BE(w.headerBuf[4:7], uint32(timestamp))
-		pio.PutU8(w.headerBuf[7:8], uint8(timestampExt))
-
-		if _, err := w.w.Write(w.headerBuf); err != nil {
-			return err
-		}
-
-		if _, err := w.w.Write(p.Data); err != nil {
-			return err
-		}
-
-		pio.PutU32BE(w.headerBuf[:4], uint32(preDataLen))
-		if _, err := w.w.Write(w.headerBuf[:4]); err != nil {
-			return err
-		}
-		if err := w.w.Flush(); err != nil {
+		if err := w.w.
+			U8(typeID).
+			U24BE(uint32(dataLen)).
+			U24BE(uint32(timestamp)).
+			U8(uint8(timestampExt)).
+			U24BE(0).
+			Bytes(p.Data).
+			U32BE(uint32(preDataLen)).Error(); err != nil {
 			return err
 		}
 	}

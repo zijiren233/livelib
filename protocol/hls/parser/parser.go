@@ -40,7 +40,7 @@ func (codeParser *CodecParser) Parse(p *av.Packet, w io.Writer) (err error) {
 	case true:
 		f, ok := p.Header.(av.VideoPacketHeader)
 		if ok {
-			if f.CodecID() == av.VIDEO_H264 {
+			if f.CodecID() == av.CODEC_AVC {
 				if codeParser.h264 == nil {
 					codeParser.h264 = h264.NewParser()
 				}

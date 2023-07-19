@@ -1,22 +1,22 @@
 package flv
 
 import (
-	"bufio"
 	"bytes"
 	"errors"
 	"io"
 
 	"github.com/zijiren233/livelib/av"
 	"github.com/zijiren233/livelib/protocol/amf"
-	"github.com/zijiren233/livelib/utils/pio"
+	"github.com/zijiren233/stream"
 )
 
 type Reader struct {
-	r            *bufio.Reader
+	r            *stream.Reader
 	inited       bool
 	demuxer      *Demuxer
 	tagHeaderBuf []byte
 	bufSize      int
+	FlvTagHeader FlvTagHeader
 }
 
 type ReaderConf func(*Reader)
@@ -36,7 +36,7 @@ func NewReader(r io.Reader, conf ...ReaderConf) *Reader {
 	for _, rc := range conf {
 		rc(reader)
 	}
-	reader.r = bufio.NewReaderSize(r, reader.bufSize)
+	reader.r = stream.NewReader(r, stream.WithReaderBufferSize(reader.bufSize))
 	return reader
 }
 
@@ -45,40 +45,41 @@ var ErrPreDataLen = errors.New("read flv pre data len error")
 
 func (fr *Reader) Read() (p *av.Packet, err error) {
 	if !fr.inited {
-		if _, err := io.ReadFull(fr.r, fr.tagHeaderBuf[:9]); err != nil {
+		if err := fr.r.Bytes(fr.tagHeaderBuf[:9]).Error(); err != nil {
 			return nil, err
 		} else if !bytes.Equal(fr.tagHeaderBuf[:9], FlvHeader) {
 			return nil, ErrHeader
-		} else if _, err := io.ReadFull(fr.r, fr.tagHeaderBuf[:4]); err != nil {
+		} else if err := fr.r.Bytes(fr.tagHeaderBuf[:4]).Error(); err != nil {
 			return nil, err
 		} else if !bytes.Equal(fr.tagHeaderBuf[:4], FlvFirstPreTagSize) {
 			return nil, ErrHeader
 		}
 		fr.inited = true
 	}
-
-	if _, err := io.ReadFull(fr.r, fr.tagHeaderBuf); err != nil {
-		return nil, err
-	}
 	p = new(av.Packet)
-	p.IsVideo = fr.tagHeaderBuf[0] == av.TAG_VIDEO
-	p.IsAudio = fr.tagHeaderBuf[0] == av.TAG_AUDIO
-	p.IsMetadata = fr.tagHeaderBuf[0] == av.TAG_SCRIPTDATAAMF0
 
-	dataLen := pio.U24BE(fr.tagHeaderBuf[1:4])
-	timestampbase := pio.U24BE(fr.tagHeaderBuf[4:7])
-	timestampExt := pio.U8(fr.tagHeaderBuf[7:8])
-
-	p.TimeStamp = uint32(timestampExt)<<24 | timestampbase
-	p.Data = make([]byte, dataLen)
-	if _, err := io.ReadFull(fr.r, p.Data); err != nil {
+	if err := fr.r.
+		U8(&fr.FlvTagHeader.TagType).
+		U24BE(&fr.FlvTagHeader.DataSize).
+		U24BE(&fr.FlvTagHeader.Timestamp).
+		U8(&fr.FlvTagHeader.TimestampExtended).
+		U24BE(&fr.FlvTagHeader.StreamID).
+		Error(); err != nil {
 		return nil, err
 	}
-	if _, err := io.ReadFull(fr.r, fr.tagHeaderBuf[:4]); err != nil {
+	p.IsVideo = fr.FlvTagHeader.TagType == av.TAG_VIDEO
+	p.IsAudio = fr.FlvTagHeader.TagType == av.TAG_AUDIO
+	p.IsMetadata = fr.FlvTagHeader.TagType == av.TAG_SCRIPTDATAAMF0
+
+	p.TimeStamp = uint32(fr.FlvTagHeader.TimestampExtended)<<24 | fr.FlvTagHeader.Timestamp
+	p.Data = make([]byte, fr.FlvTagHeader.DataSize)
+	if err := fr.r.
+		Bytes(p.Data).
+		U32BE(&fr.FlvTagHeader.PreTagSzie).
+		Error(); err != nil {
 		return nil, err
 	}
-	preDataLen := pio.U32BE(fr.tagHeaderBuf[:4])
-	if uint32(preDataLen) != dataLen+headerLen {
+	if fr.FlvTagHeader.PreTagSzie != fr.FlvTagHeader.DataSize+headerLen {
 		return nil, ErrPreDataLen
 	}
 

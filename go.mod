@@ -8,6 +8,7 @@ require (
 	github.com/soheilhy/cmux v0.1.5
 	github.com/spf13/cobra v1.7.0
 	github.com/zijiren233/ksync v0.1.1
+	github.com/zijiren233/stream v0.1.0
 )
 
 require (

@@ -90,17 +90,21 @@ func (source *Source) SendPacket(ClearCacheWhenClosed bool) error {
 	var p *av.Packet
 	var ok bool
 	for {
-		if ClearCacheWhenClosed {
-			source.lock.RLock()
-			if source.closed() && len(source.packetQueue) == 0 {
+		source.lock.RLock()
+		if source.closed() {
+			if len(source.packetQueue) == 0 {
 				source.lock.RUnlock()
 				return nil
 			}
 			p, ok = <-source.packetQueue
 			source.lock.RUnlock()
 		} else {
+			source.lock.RUnlock()
 			select {
 			case <-source.ctx.Done():
+				if ClearCacheWhenClosed {
+					continue
+				}
 				return nil
 			case p, ok = <-source.packetQueue:
 			}
@@ -200,7 +204,7 @@ func (source *Source) parse(p *av.Packet) (int32, bool, error) {
 	var vh av.VideoPacketHeader
 	if p.IsVideo {
 		vh = p.Header.(av.VideoPacketHeader)
-		if vh.CodecID() != av.VIDEO_H264 {
+		if vh.CodecID() != av.CODEC_AVC {
 			return compositionTime, false, ErrNoSupportVideoCodec
 		}
 		compositionTime = vh.CompositionTime()

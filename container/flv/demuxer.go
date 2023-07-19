@@ -18,7 +18,7 @@ func NewDemuxer() *Demuxer {
 }
 
 func (d *Demuxer) DemuxH(p *av.Packet) error {
-	var tag Tag
+	var tag FlvTagBody
 	_, err := tag.ParseMediaTagHeader(p.Data, p.IsVideo)
 	if err != nil {
 		return err
@@ -29,12 +29,12 @@ func (d *Demuxer) DemuxH(p *av.Packet) error {
 }
 
 func (d *Demuxer) Demux(p *av.Packet) error {
-	var tag Tag
+	var tag FlvTagBody
 	n, err := tag.ParseMediaTagHeader(p.Data, p.IsVideo)
 	if err != nil {
 		return err
 	}
-	if tag.CodecID() == av.VIDEO_H264 &&
+	if tag.CodecID() == av.CODEC_AVC &&
 		p.Data[0] == 0x17 && p.Data[1] == 0x02 {
 		return ErrAvcEndSEQ
 	}

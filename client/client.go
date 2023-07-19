@@ -4,6 +4,7 @@ import (
 	"container/list"
 	"context"
 	"errors"
+	"fmt"
 
 	"github.com/zijiren233/livelib/av"
 	"github.com/zijiren233/livelib/cache"
@@ -172,6 +173,7 @@ func (c *Client) PushStart(ctx context.Context, src av.Reader) error {
 
 			p, err := src.Read()
 			if err != nil {
+				fmt.Printf("err: %v\n", err)
 				return
 			}
 			if err := pusher.Write(p); err != nil {

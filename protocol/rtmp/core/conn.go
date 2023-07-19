@@ -8,8 +8,8 @@ import (
 	"time"
 
 	"github.com/zijiren233/ksync"
-	"github.com/zijiren233/livelib/utils/pio"
 	"github.com/zijiren233/livelib/utils/pool"
+	"github.com/zijiren233/stream"
 )
 
 const (
@@ -309,7 +309,7 @@ func initControlMsg(id, size, value uint32) *ChunkStream {
 		Length:   size,
 		Data:     make([]byte, size),
 	}
-	pio.PutU32BE(ret.Data[:size], value)
+	stream.PutU32BE(ret.Data[:size], value)
 	return ret
 }
 

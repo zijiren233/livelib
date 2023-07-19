@@ -87,17 +87,21 @@ func (w *Writer) SendPacket(ClearCacheWhenClosed bool) error {
 	var p *av.Packet
 	var ok bool
 	for {
-		if ClearCacheWhenClosed {
-			w.lock.RLock()
-			if w.closed() && len(w.packetQueue) == 0 {
+		w.lock.RLock()
+		if w.closed() {
+			if len(w.packetQueue) == 0 {
 				w.lock.RUnlock()
 				return nil
 			}
 			p, ok = <-w.packetQueue
 			w.lock.RUnlock()
 		} else {
+			w.lock.RUnlock()
 			select {
 			case <-w.ctx.Done():
+				if ClearCacheWhenClosed {
+					continue
+				}
 				return nil
 			case p, ok = <-w.packetQueue:
 			}

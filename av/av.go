@@ -4,6 +4,7 @@ import (
 	"io"
 )
 
+// Flv Tag Header
 const (
 	TAG_AUDIO          = 0x08
 	TAG_VIDEO          = 0x09
@@ -45,11 +46,24 @@ const (
 	AVC_SEQHDR = 0
 	AVC_NALU   = 1
 	AVC_EOS    = 2
+)
 
+// Flv Video Tag Data Frame Type
+const (
 	FRAME_KEY   = 1
 	FRAME_INTER = 2
+	FRAME_DISPO = 3
+)
 
-	VIDEO_H264 = 7
+// Flv Codec ID
+const (
+	CODEC_JPEG        = 1
+	CODEC_SORENSON    = 2
+	CODEC_SCREEN      = 3
+	CODEC_ON2VP6      = 4
+	CODEC_ON2VP6ALPHA = 5
+	CODEC_SCREEN2     = 6
+	CODEC_AVC         = 7
 )
 
 var (
