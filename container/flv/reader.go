@@ -36,7 +36,7 @@ func NewReader(r io.Reader, conf ...ReaderConf) *Reader {
 	for _, rc := range conf {
 		rc(reader)
 	}
-	reader.r = stream.NewReader(r, stream.WithReaderBufferSize(reader.bufSize))
+	reader.r = stream.NewReader(r, stream.WithReaderBuffer(true))
 	return reader
 }
 

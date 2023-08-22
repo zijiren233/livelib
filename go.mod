@@ -7,8 +7,9 @@ require (
 	github.com/gin-gonic/gin v1.9.1
 	github.com/soheilhy/cmux v0.1.5
 	github.com/spf13/cobra v1.7.0
+	github.com/zijiren233/gencontainer v0.0.0-20230811040529-b988b44ccec4
 	github.com/zijiren233/ksync v0.1.1
-	github.com/zijiren233/stream v0.1.0
+	github.com/zijiren233/stream v0.2.0
 )
 
 require (

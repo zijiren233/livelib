@@ -53,7 +53,7 @@ func NewHttpFLVWriter(ctx context.Context, w io.Writer, conf ...HttpFlvWriterCon
 	}
 
 	writer.ctx, writer.cancel = context.WithCancel(ctx)
-	writer.w = stream.NewWriter(w, stream.WithWriterBufferSize(writer.bufSize))
+	writer.w = stream.NewWriter(w, stream.WithWriterBuffer(true))
 
 	return writer
 }

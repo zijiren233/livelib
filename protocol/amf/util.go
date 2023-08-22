@@ -17,7 +17,7 @@ func DumpBytes(label string, buf []byte, size int) {
 func Dump(label string, val interface{}) error {
 	json, err := json.MarshalIndent(val, "", "  ")
 	if err != nil {
-		return fmt.Errorf("Error dumping %s: %s", label, err)
+		return fmt.Errorf("error dumping %s: %s", label, err)
 	}
 
 	fmt.Printf("Dumping %s:\n%s\n", label, json)
@@ -70,7 +70,7 @@ func ReadMarker(r io.Reader) (byte, error) {
 }
 
 func AssertMarker(r io.Reader, checkMarker bool, m byte) error {
-	if checkMarker == false {
+	if !checkMarker {
 		return nil
 	}
 

@@ -19,7 +19,7 @@ func TestEncodeAmf0Number(t *testing.T) {
 	if n != 9 {
 		t.Errorf("expected to write 9 bytes, actual %d", n)
 	}
-	if bytes.Compare(buf.Bytes(), expect) != 0 {
+	if !bytes.Equal(buf.Bytes(), expect) {
 		t.Errorf("expected buffer: %+v, got: %+v", expect, buf.Bytes())
 	}
 }
@@ -37,7 +37,7 @@ func TestEncodeAmf0BooleanTrue(t *testing.T) {
 	if n != 2 {
 		t.Errorf("expected to write 2 bytes, actual %d", n)
 	}
-	if bytes.Compare(buf.Bytes(), expect) != 0 {
+	if !bytes.Equal(buf.Bytes(), expect) {
 		t.Errorf("expected buffer: %+v, got: %+v", expect, buf.Bytes())
 	}
 }
@@ -55,7 +55,7 @@ func TestEncodeAmf0BooleanFalse(t *testing.T) {
 	if n != 2 {
 		t.Errorf("expected to write 2 bytes, actual %d", n)
 	}
-	if bytes.Compare(buf.Bytes(), expect) != 0 {
+	if !bytes.Equal(buf.Bytes(), expect) {
 		t.Errorf("expected buffer: %+v, got: %+v", expect, buf.Bytes())
 	}
 }
@@ -73,7 +73,7 @@ func TestEncodeAmf0String(t *testing.T) {
 	if n != 6 {
 		t.Errorf("expected to write 6 bytes, actual %d", n)
 	}
-	if bytes.Compare(buf.Bytes(), expect) != 0 {
+	if !bytes.Equal(buf.Bytes(), expect) {
 		t.Errorf("expected buffer: %+v, got: %+v", expect, buf.Bytes())
 	}
 }
@@ -94,7 +94,7 @@ func TestEncodeAmf0Object(t *testing.T) {
 	if n != 15 {
 		t.Errorf("expected to write 15 bytes, actual %d", n)
 	}
-	if bytes.Compare(buf.Bytes(), expect) != 0 {
+	if !bytes.Equal(buf.Bytes(), expect) {
 		t.Errorf("expected buffer: %+v, got: %+v", expect, buf.Bytes())
 	}
 }
@@ -113,7 +113,7 @@ func TestEncodeAmf0EcmaArray(t *testing.T) {
 		t.Errorf("%s", err)
 	}
 
-	if bytes.Compare(buf.Bytes(), expect) != 0 {
+	if !bytes.Equal(buf.Bytes(), expect) {
 		t.Errorf("expected buffer: %+v, got: %+v", expect, buf.Bytes())
 	}
 }
@@ -134,7 +134,7 @@ func TestEncodeAmf0StrictArray(t *testing.T) {
 		t.Errorf("%s", err)
 	}
 
-	if bytes.Compare(buf.Bytes(), expect) != 0 {
+	if !bytes.Equal(buf.Bytes(), expect) {
 		t.Errorf("expected buffer: %+v, got: %+v", expect, buf.Bytes())
 	}
 }
@@ -152,7 +152,7 @@ func TestEncodeAmf0Null(t *testing.T) {
 	if n != 1 {
 		t.Errorf("expected to write 1 byte, actual %d", n)
 	}
-	if bytes.Compare(buf.Bytes(), expect) != 0 {
+	if !bytes.Equal(buf.Bytes(), expect) {
 		t.Errorf("expected buffer: %+v, got: %+v", expect, buf.Bytes())
 	}
 }
@@ -169,7 +169,7 @@ func TestEncodeAmf0LongString(t *testing.T) {
 
 	enc := new(Encoder)
 
-	_, err := enc.EncodeAmf0(buf, string(tbuf.Bytes()))
+	_, err := enc.EncodeAmf0(buf, tbuf.String())
 	if err != nil {
 		t.Errorf("%s", err)
 	}

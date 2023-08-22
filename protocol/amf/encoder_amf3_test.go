@@ -16,7 +16,7 @@ func TestEncodeAmf3EmptyString(t *testing.T) {
 		t.Errorf("%s", err)
 	}
 
-	if bytes.Compare(buf.Bytes(), expect) != 0 {
+	if !bytes.Equal(buf.Bytes(), expect) {
 		t.Errorf("expected buffer: %+v, got: %+v", expect, buf.Bytes())
 	}
 }
@@ -32,7 +32,7 @@ func TestEncodeAmf3Undefined(t *testing.T) {
 		t.Errorf("%s", err)
 	}
 
-	if bytes.Compare(buf.Bytes(), expect) != 0 {
+	if !bytes.Equal(buf.Bytes(), expect) {
 		t.Errorf("expected buffer: %+v, got: %+v", expect, buf.Bytes())
 	}
 }
@@ -48,7 +48,7 @@ func TestEncodeAmf3Null(t *testing.T) {
 		t.Errorf("%s", err)
 	}
 
-	if bytes.Compare(buf.Bytes(), expect) != 0 {
+	if !bytes.Equal(buf.Bytes(), expect) {
 		t.Errorf("expected buffer: %+v, got: %+v", expect, buf.Bytes())
 	}
 }
@@ -64,7 +64,7 @@ func TestEncodeAmf3False(t *testing.T) {
 		t.Errorf("%s", err)
 	}
 
-	if bytes.Compare(buf.Bytes(), expect) != 0 {
+	if !bytes.Equal(buf.Bytes(), expect) {
 		t.Errorf("expected buffer: %+v, got: %+v", expect, buf.Bytes())
 	}
 }
@@ -80,7 +80,7 @@ func TestEncodeAmf3True(t *testing.T) {
 		t.Errorf("%s", err)
 	}
 
-	if bytes.Compare(buf.Bytes(), expect) != 0 {
+	if !bytes.Equal(buf.Bytes(), expect) {
 		t.Errorf("expected buffer: %+v, got: %+v", expect, buf.Bytes())
 	}
 }
@@ -110,7 +110,7 @@ func TestEncodeAmf3Integer(t *testing.T) {
 	if n != 5 {
 		t.Errorf("expected to write 5 bytes, actual %d", n)
 	}
-	if bytes.Compare(buf.Bytes(), expect) != 0 {
+	if !bytes.Equal(buf.Bytes(), expect) {
 		t.Errorf("expected buffer: %+v, got: %+v", expect, buf.Bytes())
 	}
 }
@@ -126,7 +126,7 @@ func TestEncodeAmf3Double(t *testing.T) {
 		t.Errorf("%s", err)
 	}
 
-	if bytes.Compare(buf.Bytes(), expect) != 0 {
+	if !bytes.Equal(buf.Bytes(), expect) {
 		t.Errorf("expected buffer: %+v, got: %+v", expect, buf.Bytes())
 	}
 }
@@ -142,7 +142,7 @@ func TestEncodeAmf3String(t *testing.T) {
 		t.Errorf("%s", err)
 	}
 
-	if bytes.Compare(buf.Bytes(), expect) != 0 {
+	if !bytes.Equal(buf.Bytes(), expect) {
 		t.Errorf("expected buffer: %+v, got: %+v", expect, buf.Bytes())
 	}
 }
@@ -168,7 +168,7 @@ func TestEncodeAmf3Array(t *testing.T) {
 		t.Errorf("err: %s", err)
 	}
 
-	if bytes.Compare(buf.Bytes(), expect) != 0 {
+	if !bytes.Equal(buf.Bytes(), expect) {
 		t.Errorf("expected buffer: %+v, got: %+v", expect, buf.Bytes())
 	}
 }
@@ -193,7 +193,7 @@ func TestEncodeAmf3Object(t *testing.T) {
 		t.Errorf("err: %s", err)
 	}
 
-	if bytes.Compare(buf.Bytes(), expect) != 0 {
+	if !bytes.Equal(buf.Bytes(), expect) {
 		t.Errorf("expected buffer:\n%#v\ngot:\n%#v", expect, buf.Bytes())
 	}
 }

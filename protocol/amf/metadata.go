@@ -35,10 +35,9 @@ func MetaDataReform(p []byte, flag uint8) ([]byte, error) {
 		if err != nil {
 			return nil, err
 		}
-		switch v.(type) {
+		switch v := v.(type) {
 		case string:
-			vv := v.(string)
-			if vv != SetDataFrame {
+			if v != SetDataFrame {
 				tmplen := len(setFrameFrame)
 				b := make([]byte, tmplen+len(p))
 				copy(b, setFrameFrame)
@@ -53,10 +52,9 @@ func MetaDataReform(p []byte, flag uint8) ([]byte, error) {
 		if err != nil {
 			return nil, err
 		}
-		switch v.(type) {
+		switch v := v.(type) {
 		case string:
-			vv := v.(string)
-			if vv == SetDataFrame {
+			if v == SetDataFrame {
 				p = p[len(setFrameFrame):]
 			}
 		default:

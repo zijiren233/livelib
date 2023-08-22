@@ -43,7 +43,7 @@ func (e *Encoder) EncodeAmf0(w io.Writer, val interface{}) (int, error) {
 		return e.EncodeAmf0StrictArray(w, arr, true)
 	case reflect.Map:
 		obj, ok := val.(Object)
-		if ok != true {
+		if !ok {
 			return 0, fmt.Errorf("encode amf0: unable to create object from map")
 		}
 		return e.EncodeAmf0Object(w, obj, true)

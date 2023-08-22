@@ -203,6 +203,9 @@ func (d *Decoder) DecodeAmf0EcmaArray(r io.Reader, decodeMarker bool) (Object, e
 
 	var length uint32
 	err := binary.Read(r, binary.BigEndian, &length)
+	if err != nil {
+		return nil, fmt.Errorf("decode amf0: unable to decode ecma array length: %s", err)
+	}
 
 	result, err := d.DecodeAmf0Object(r, false)
 	if err != nil {
@@ -244,6 +247,7 @@ func (d *Decoder) DecodeAmf0StrictArray(r io.Reader, decodeMarker bool) (result 
 // format:
 // - normal number format:
 //   - 8 byte big endian float64
+//
 // - 2 byte unused
 func (d *Decoder) DecodeAmf0Date(r io.Reader, decodeMarker bool) (result float64, err error) {
 	if err = AssertMarker(r, decodeMarker, AMF0_DATE_MARKER); err != nil {
@@ -309,6 +313,7 @@ func (d *Decoder) DecodeAmf0XmlDocument(r io.Reader, decodeMarker bool) (result 
 // - normal string format:
 //   - 2 byte big endian uint16 header to determine size
 //   - n (size) byte utf8 string
+//
 // - normal object format:
 //   - loop encoded string followed by encoded value
 //   - terminated with empty string followed by 1 byte 0x09

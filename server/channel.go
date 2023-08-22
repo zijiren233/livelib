@@ -2,10 +2,10 @@ package server
 
 import (
 	"bytes"
-	"container/list"
 	"context"
 	"errors"
 
+	"github.com/zijiren233/gencontainer/dllist"
 	"github.com/zijiren233/livelib/av"
 	"github.com/zijiren233/livelib/cache"
 	"github.com/zijiren233/livelib/protocol/hls"
@@ -14,7 +14,7 @@ import (
 type channel struct {
 	channelName   string
 	inPublication bool
-	playerList    *list.List
+	playerList    *dllist.Dllist[*packWriter]
 
 	hlsWriter *hls.Source
 }
@@ -22,7 +22,7 @@ type channel struct {
 func newChannel(channelName string) *channel {
 	return &channel{
 		channelName: channelName,
-		playerList:  list.New(),
+		playerList:  dllist.New[*packWriter](),
 	}
 }
 
@@ -89,22 +89,17 @@ func (c *channel) PushStart(ctx context.Context, pusher av.Reader) error {
 		cache.Write(p)
 
 		for e := c.playerList.Front(); e != nil; e = e.Next() {
-			player, ok := e.Value.(*packWriter)
-			if !ok {
-				c.playerList.Remove(e)
-				continue
-			}
-			if !player.Inited() {
-				if err = cache.Send(player.GetWriter()); err != nil {
+			if !e.Value.Inited() {
+				if err = cache.Send(e.Value.GetWriter()); err != nil {
 					c.playerList.Remove(e)
-					player.GetWriter().Close()
+					e.Value.GetWriter().Close()
 					continue
 				}
-				player.Init()
+				e.Value.Init()
 			} else {
-				if err = player.GetWriter().Write(p); err != nil {
+				if err = e.Value.GetWriter().Write(p); err != nil {
 					c.playerList.Remove(e)
-					player.GetWriter().Close()
+					e.Value.GetWriter().Close()
 					continue
 				}
 			}
@@ -112,13 +107,13 @@ func (c *channel) PushStart(ctx context.Context, pusher av.Reader) error {
 	}
 }
 
-func (c *channel) AddPlayer(w av.WriteCloser) *list.Element {
+func (c *channel) AddPlayer(w av.WriteCloser) *dllist.Element[*packWriter] {
 	player := newPackWriterCloser(w)
 	e := c.playerList.PushFront(player)
 	return e
 }
 
-func (c *channel) DelPlayer(e *list.Element) any {
+func (c *channel) DelPlayer(e *dllist.Element[*packWriter]) *packWriter {
 	return c.playerList.Remove(e)
 }
 

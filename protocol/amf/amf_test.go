@@ -199,7 +199,7 @@ func TestAmf3ByteArray(t *testing.T) {
 		t.Errorf("err: %s", err)
 	}
 
-	if bytes.Compare(result, expect) != 0 {
+	if !bytes.Equal(result, expect) {
 		t.Errorf("expected: %+v, got %+v", expect, buf)
 	}
 }

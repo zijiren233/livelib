@@ -59,7 +59,7 @@ func (e *Encoder) EncodeAmf3(w io.Writer, val interface{}) (int, error) {
 		return e.EncodeAmf3Array(w, arr, true)
 	case reflect.Map:
 		obj, ok := val.(Object)
-		if ok != true {
+		if !ok {
 			return 0, fmt.Errorf("encode amf3: unable to create object from map")
 		}
 
@@ -171,8 +171,8 @@ func (e *Encoder) EncodeAmf3Double(w io.Writer, val float64, encodeMarker bool) 
 
 // marker: 1 byte 0x06
 // format:
-// - u29 reference int. if reference, no more data. if not reference,
-//   length value of bytes to read to complete string.
+//   - u29 reference int. if reference, no more data. if not reference,
+//     length value of bytes to read to complete string.
 func (e *Encoder) EncodeAmf3String(w io.Writer, val string, encodeMarker bool) (n int, err error) {
 	if encodeMarker {
 		if err = WriteMarker(w, AMF3_STRING_MARKER); err != nil {
@@ -276,7 +276,7 @@ func (e *Encoder) EncodeAmf3Object(w io.Writer, val TypedObject, encodeMarker bo
 	trait.Dynamic = false
 	trait.Externalizable = false
 
-	for k, _ := range val.Object {
+	for k := range val.Object {
 		trait.Properties = append(trait.Properties, k)
 	}
 
@@ -335,7 +335,7 @@ func (e *Encoder) EncodeAmf3Object(w io.Writer, val TypedObject, encodeMarker bo
 				}
 			}
 
-			if foundProp != true {
+			if !foundProp {
 				m, err = e.encodeAmf3Utf8(w, k)
 				if err != nil {
 					return n, fmt.Errorf("amf3 encode: cannot encode dynamic object property key: %s", err)
@@ -362,8 +362,8 @@ func (e *Encoder) EncodeAmf3Object(w io.Writer, val TypedObject, encodeMarker bo
 
 // marker: 1 byte 0x0c
 // format:
-// - u29 reference int. if reference, no more data. if not reference,
-//   length value of bytes to read .
+//   - u29 reference int. if reference, no more data. if not reference,
+//     length value of bytes to read .
 func (e *Encoder) EncodeAmf3ByteArray(w io.Writer, val []byte, encodeMarker bool) (n int, err error) {
 	if encodeMarker {
 		if err = WriteMarker(w, AMF3_BYTEARRAY_MARKER); err != nil {
