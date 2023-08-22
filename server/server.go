@@ -93,6 +93,20 @@ func (s *Server) getApp(appName string) (*app, error) {
 	}
 }
 
+func (s *Server) DelApp(appName string) error {
+	s.appsLock.Lock(appName)
+	defer s.appsLock.Unlock(appName)
+	return s.delApp(appName)
+}
+
+func (s *Server) delApp(appName string) error {
+	app, ok := s.apps[appName]
+	if !ok {
+		return ErrAppNotFount
+	}
+	return app.Close()
+}
+
 func (s *Server) GetChannelWithApp(appName, channelName string) (*channel, error) {
 	a, err := s.GetApp(appName)
 	if err != nil {
