@@ -12,7 +12,7 @@ import (
 	"github.com/zijiren233/livelib/protocol/hls"
 )
 
-type channel struct {
+type Channel struct {
 	channelName   string
 	inPublication bool
 	playerList    *dllist.Dllist[*packWriter]
@@ -22,14 +22,14 @@ type channel struct {
 	hlsWriter *hls.Source
 }
 
-func newChannel(channelName string) *channel {
-	return &channel{
+func newChannel(channelName string) *Channel {
+	return &Channel{
 		channelName: channelName,
 		playerList:  dllist.New[*packWriter](),
 	}
 }
 
-func (c *channel) InPublication() bool {
+func (c *Channel) InPublication() bool {
 	return c.inPublication
 }
 
@@ -64,7 +64,7 @@ var (
 	ErrClosed      = errors.New("channel closed")
 )
 
-func (c *channel) PushStart(ctx context.Context, pusher av.Reader) error {
+func (c *Channel) PushStart(ctx context.Context, pusher av.Reader) error {
 	if c.closed {
 		return ErrClosed
 	}
@@ -129,7 +129,7 @@ func (c *channel) PushStart(ctx context.Context, pusher av.Reader) error {
 	}
 }
 
-func (c *channel) Close() error {
+func (c *Channel) Close() error {
 	if c.closed {
 		return ErrClosed
 	}
@@ -141,11 +141,11 @@ func (c *channel) Close() error {
 	return nil
 }
 
-func (c *channel) Closed() bool {
+func (c *Channel) Closed() bool {
 	return c.closed
 }
 
-func (c *channel) AddPlayer(w av.WriteCloser) (*dllist.Element[*packWriter], error) {
+func (c *Channel) AddPlayer(w av.WriteCloser) (*dllist.Element[*packWriter], error) {
 	if c.closed {
 		return nil, ErrClosed
 	}
@@ -154,14 +154,14 @@ func (c *channel) AddPlayer(w av.WriteCloser) (*dllist.Element[*packWriter], err
 	return e, nil
 }
 
-func (c *channel) DelPlayer(e *dllist.Element[*packWriter]) (*packWriter, error) {
+func (c *Channel) DelPlayer(e *dllist.Element[*packWriter]) (*packWriter, error) {
 	if c.closed {
 		return nil, ErrClosed
 	}
 	return c.playerList.Remove(e), nil
 }
 
-func (c *channel) GetPlayers() ([]av.WriteCloser, error) {
+func (c *Channel) GetPlayers() ([]av.WriteCloser, error) {
 	if c.closed {
 		return nil, ErrClosed
 	}
@@ -172,7 +172,7 @@ func (c *channel) GetPlayers() ([]av.WriteCloser, error) {
 	return players, nil
 }
 
-func (c *channel) InitHlsPlayer() error {
+func (c *Channel) InitHlsPlayer() error {
 	if c.closed {
 		return ErrClosed
 	}
@@ -184,13 +184,13 @@ func (c *channel) InitHlsPlayer() error {
 	return nil
 }
 
-func (c *channel) InitdHlsPlayer() bool {
+func (c *Channel) InitdHlsPlayer() bool {
 	return c.hlsWriter != nil && !c.hlsWriter.Closed()
 }
 
 var ErrHlsPlayerNotInit = errors.New("hls player not init")
 
-func (c *channel) GenM3U8PlayList(tsBashPath string) (*bytes.Buffer, error) {
+func (c *Channel) GenM3U8PlayList(tsBashPath string) (*bytes.Buffer, error) {
 	if c.closed {
 		return nil, ErrClosed
 	}
@@ -200,7 +200,7 @@ func (c *channel) GenM3U8PlayList(tsBashPath string) (*bytes.Buffer, error) {
 	return c.hlsWriter.GetCacheInc().GenM3U8PlayList(tsBashPath), nil
 }
 
-func (c *channel) GetTsFile(tsName string) ([]byte, error) {
+func (c *Channel) GetTsFile(tsName string) ([]byte, error) {
 	if c.closed {
 		return nil, ErrClosed
 	}

@@ -115,7 +115,7 @@ func (s *Server) delApp(appName string) error {
 	return app.Close()
 }
 
-func (s *Server) GetChannelWithApp(appName, channelName string) (*channel, error) {
+func (s *Server) GetChannelWithApp(appName, channelName string) (*Channel, error) {
 	a, err := s.GetApp(appName)
 	if err != nil {
 		return nil, err
@@ -123,7 +123,7 @@ func (s *Server) GetChannelWithApp(appName, channelName string) (*channel, error
 	return a.GetChannel(channelName)
 }
 
-func (s *Server) GetOrNewChannelWithApp(appName, channelName string) *channel {
+func (s *Server) GetOrNewChannelWithApp(appName, channelName string) *Channel {
 	return s.GetOrNewApp(appName).GetOrNewChannel(channelName)
 }
 
@@ -157,7 +157,7 @@ func (s *Server) handleConn(conn *core.Conn) (err error) {
 			return err
 		}
 	}
-	var channel *channel
+	var channel *Channel
 	if s.autoCreateAppOrChannel {
 		channel = s.GetOrNewChannelWithApp(app, name)
 	} else {

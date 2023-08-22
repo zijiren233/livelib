@@ -9,7 +9,7 @@ import (
 type App struct {
 	appName      string
 	channelsLock *ksync.Kmutex
-	channels     map[string]*channel
+	channels     map[string]*Channel
 	closed       bool
 }
 
@@ -17,17 +17,17 @@ func NewApp(appName string) *App {
 	return &App{
 		appName:      appName,
 		channelsLock: ksync.NewKmutex(),
-		channels:     make(map[string]*channel),
+		channels:     make(map[string]*Channel),
 	}
 }
 
-func (a *App) GetOrNewChannel(channelName string) *channel {
+func (a *App) GetOrNewChannel(channelName string) *Channel {
 	a.channelsLock.Lock(channelName)
 	defer a.channelsLock.Unlock(channelName)
 	return a.getOrNewChannel(channelName)
 }
 
-func (a *App) getOrNewChannel(channelName string) *channel {
+func (a *App) getOrNewChannel(channelName string) *Channel {
 	if c, ok := a.channels[channelName]; ok {
 		return c
 	} else {
@@ -39,7 +39,7 @@ func (a *App) getOrNewChannel(channelName string) *channel {
 
 var ErrChannelNotFound = errors.New("channel not found")
 
-func (a *App) GetChannel(channelName string) (*channel, error) {
+func (a *App) GetChannel(channelName string) (*Channel, error) {
 	a.channelsLock.Lock(channelName)
 	defer a.channelsLock.Unlock(channelName)
 	if c, ok := a.channels[channelName]; ok {
@@ -49,7 +49,7 @@ func (a *App) GetChannel(channelName string) (*channel, error) {
 	}
 }
 
-func (a *App) GetChannels() map[string]*channel {
+func (a *App) GetChannels() map[string]*Channel {
 	return a.channels
 }
 
