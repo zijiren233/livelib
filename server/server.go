@@ -11,21 +11,23 @@ import (
 )
 
 type Server struct {
-	appsLock         *ksync.Kmutex
-	apps             map[string]*App
-	connBufferSize   int
-	parseChannelFunc parseChannelFunc
-	initHlsPlayer    bool
+	appsLock               *ksync.Kmutex
+	apps                   map[string]*App
+	connBufferSize         int
+	parseChannelFunc       parseChannelFunc
+	initHlsPlayer          bool
+	autoCreateAppOrChannel bool
 }
 
 type parseChannelFunc func(ReqAppName, ReqChannelName string, IsPublisher bool) (TrueAppName string, TrueChannel string, err error)
 
 func DefaultRtmpServer() *Server {
 	return &Server{
-		appsLock:       ksync.NewKmutex(),
-		apps:           make(map[string]*App),
-		connBufferSize: 4096,
-		initHlsPlayer:  false,
+		appsLock:               ksync.NewKmutex(),
+		apps:                   make(map[string]*App),
+		connBufferSize:         4096,
+		initHlsPlayer:          false,
+		autoCreateAppOrChannel: false,
 	}
 }
 
@@ -46,6 +48,12 @@ func WithConnBufferSize(bufferSize int) ServerConf {
 func WithInitHlsPlayer(init bool) ServerConf {
 	return func(s *Server) {
 		s.initHlsPlayer = init
+	}
+}
+
+func WithAutoCreateAppOrChannel(auto bool) ServerConf {
+	return func(s *Server) {
+		s.autoCreateAppOrChannel = auto
 	}
 }
 
@@ -149,7 +157,21 @@ func (s *Server) handleConn(conn *core.Conn) (err error) {
 			return err
 		}
 	}
-	channel := s.GetOrNewChannelWithApp(app, name)
+	var channel *channel
+	if s.autoCreateAppOrChannel {
+		channel = s.GetOrNewChannelWithApp(app, name)
+	} else {
+		app, err := s.GetApp(app)
+		if err != nil {
+			conn.Close()
+			return err
+		}
+		channel, err = app.GetChannel(name)
+		if err != nil {
+			conn.Close()
+			return err
+		}
+	}
 	if connServer.IsPublisher() {
 		ctx, cancel := context.WithCancel(context.Background())
 		defer cancel()

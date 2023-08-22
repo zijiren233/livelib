@@ -35,7 +35,7 @@ func Server(cmd *cobra.Command, args []string) {
 	muxer := cmux.New(listener)
 	httpl := muxer.Match(cmux.HTTP1Fast())
 	tcp := muxer.Match(cmux.Any())
-	s := server.NewRtmpServer(server.WithInitHlsPlayer(true))
+	s := server.NewRtmpServer(server.WithInitHlsPlayer(true), server.WithAutoCreateAppOrChannel(true))
 	go s.Serve(tcp)
 	if flags.Dev {
 		gin.SetMode(gin.DebugMode)
