@@ -12,7 +12,7 @@ import (
 
 type Server struct {
 	appsLock         *ksync.Kmutex
-	apps             map[string]*app
+	apps             map[string]*App
 	connBufferSize   int
 	parseChannelFunc parseChannelFunc
 	initHlsPlayer    bool
@@ -23,7 +23,7 @@ type parseChannelFunc func(ReqAppName, ReqChannelName string, IsPublisher bool) 
 func DefaultRtmpServer() *Server {
 	return &Server{
 		appsLock:       ksync.NewKmutex(),
-		apps:           make(map[string]*app),
+		apps:           make(map[string]*App),
 		connBufferSize: 4096,
 		initHlsPlayer:  false,
 	}
@@ -61,17 +61,17 @@ func (s *Server) SetParseChannelFunc(f parseChannelFunc) {
 	s.parseChannelFunc = f
 }
 
-func (s *Server) GetOrNewApp(appName string) *app {
+func (s *Server) GetOrNewApp(appName string) *App {
 	s.appsLock.Lock(appName)
 	defer s.appsLock.Unlock(appName)
 	return s.getOrNewApp(appName)
 }
 
-func (s *Server) getOrNewApp(appName string) *app {
+func (s *Server) getOrNewApp(appName string) *App {
 	if app, ok := s.apps[appName]; ok {
 		return app
 	} else {
-		a := newApp(appName)
+		a := NewApp(appName)
 		s.apps[appName] = a
 		return a
 	}
@@ -79,13 +79,13 @@ func (s *Server) getOrNewApp(appName string) *app {
 
 var ErrAppNotFount = errors.New("app not found")
 
-func (s *Server) GetApp(appName string) (*app, error) {
+func (s *Server) GetApp(appName string) (*App, error) {
 	s.appsLock.Lock(appName)
 	defer s.appsLock.Unlock(appName)
 	return s.getApp(appName)
 }
 
-func (s *Server) getApp(appName string) (*app, error) {
+func (s *Server) getApp(appName string) (*App, error) {
 	if a, ok := s.apps[appName]; ok {
 		return a, nil
 	} else {

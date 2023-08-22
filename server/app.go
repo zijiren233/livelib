@@ -6,28 +6,28 @@ import (
 	"github.com/zijiren233/ksync"
 )
 
-type app struct {
+type App struct {
 	appName      string
 	channelsLock *ksync.Kmutex
 	channels     map[string]*channel
 	closed       bool
 }
 
-func newApp(appName string) *app {
-	return &app{
+func NewApp(appName string) *App {
+	return &App{
 		appName:      appName,
 		channelsLock: ksync.NewKmutex(),
 		channels:     make(map[string]*channel),
 	}
 }
 
-func (a *app) GetOrNewChannel(channelName string) *channel {
+func (a *App) GetOrNewChannel(channelName string) *channel {
 	a.channelsLock.Lock(channelName)
 	defer a.channelsLock.Unlock(channelName)
 	return a.getOrNewChannel(channelName)
 }
 
-func (a *app) getOrNewChannel(channelName string) *channel {
+func (a *App) getOrNewChannel(channelName string) *channel {
 	if c, ok := a.channels[channelName]; ok {
 		return c
 	} else {
@@ -39,7 +39,7 @@ func (a *app) getOrNewChannel(channelName string) *channel {
 
 var ErrChannelNotFound = errors.New("channel not found")
 
-func (a *app) GetChannel(channelName string) (*channel, error) {
+func (a *App) GetChannel(channelName string) (*channel, error) {
 	a.channelsLock.Lock(channelName)
 	defer a.channelsLock.Unlock(channelName)
 	if c, ok := a.channels[channelName]; ok {
@@ -49,17 +49,17 @@ func (a *app) GetChannel(channelName string) (*channel, error) {
 	}
 }
 
-func (a *app) GetChannels() map[string]*channel {
+func (a *App) GetChannels() map[string]*channel {
 	return a.channels
 }
 
-func (a *app) DelChannel(channelName string) error {
+func (a *App) DelChannel(channelName string) error {
 	a.channelsLock.Lock(channelName)
 	defer a.channelsLock.Unlock(channelName)
 	return a.delChannel(channelName)
 }
 
-func (a *app) delChannel(channelName string) error {
+func (a *App) delChannel(channelName string) error {
 	if c, ok := a.channels[channelName]; ok {
 		c.Close()
 		delete(a.channels, channelName)
@@ -69,7 +69,7 @@ func (a *app) delChannel(channelName string) error {
 	}
 }
 
-func (a *app) Close() error {
+func (a *App) Close() error {
 	if a.closed {
 		return nil
 	}
