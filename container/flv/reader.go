@@ -36,7 +36,7 @@ func NewReader(r io.Reader, conf ...ReaderConf) *Reader {
 	for _, rc := range conf {
 		rc(reader)
 	}
-	reader.r = stream.NewReader(r, stream.WithReaderBuffer(true))
+	reader.r = stream.NewReader(r, stream.BigEndian)
 	return reader
 }
 
@@ -60,10 +60,10 @@ func (fr *Reader) Read() (p *av.Packet, err error) {
 
 	if err := fr.r.
 		U8(&fr.FlvTagHeader.TagType).
-		U24BE(&fr.FlvTagHeader.DataSize).
-		U24BE(&fr.FlvTagHeader.Timestamp).
+		U24(&fr.FlvTagHeader.DataSize).
+		U24(&fr.FlvTagHeader.Timestamp).
 		U8(&fr.FlvTagHeader.TimestampExtended).
-		U24BE(&fr.FlvTagHeader.StreamID).
+		U24(&fr.FlvTagHeader.StreamID).
 		Error(); err != nil {
 		return nil, err
 	}
@@ -75,7 +75,7 @@ func (fr *Reader) Read() (p *av.Packet, err error) {
 	p.Data = make([]byte, fr.FlvTagHeader.DataSize)
 	if err := fr.r.
 		Bytes(p.Data).
-		U32BE(&fr.FlvTagHeader.PreTagSzie).
+		U32(&fr.FlvTagHeader.PreTagSzie).
 		Error(); err != nil {
 		return nil, err
 	}

@@ -54,7 +54,7 @@ func NewWriter(ctx context.Context, w io.Writer, conf ...WriterConf) *Writer {
 	}
 
 	writer.ctx, writer.cancel = context.WithCancel(ctx)
-	writer.w = stream.NewWriter(w, stream.WithWriterBuffer(true))
+	writer.w = stream.NewWriter(w, stream.BigEndian)
 
 	return writer
 }
@@ -99,12 +99,12 @@ func (w *Writer) Write(p *av.Packet) error {
 
 	return w.w.
 		U8(typeID).
-		U24BE(uint32(dataLen)).
-		U24BE(uint32(timestamp)).
+		U24(uint32(dataLen)).
+		U24(uint32(timestamp)).
 		U8(uint8(timestampExt)).
-		U24BE(0).
+		U24(0).
 		Bytes(p.Data).
-		U32BE(uint32(preDataLen)).Flush().Error()
+		U32(uint32(preDataLen)).Error()
 }
 
 func (w *Writer) Closed() bool {

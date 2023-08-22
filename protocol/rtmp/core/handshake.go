@@ -83,8 +83,8 @@ func hsCreate01(p []byte, time uint32, ver uint32, key []byte) {
 	p[0] = 3
 	p1 := p[1:]
 	rand.Read(p1[8:])
-	stream.PutU32BE(p1[0:4], time)
-	stream.PutU32BE(p1[4:8], ver)
+	stream.BigEndian.WriteU32(p1[0:4], time)
+	stream.BigEndian.WriteU32(p1[4:8], ver)
 	gap := hsCalcDigestPos(p1, 8)
 	digest := hsMakeDigest(key, p1, gap)
 	copy(p1[gap:], digest)
@@ -125,7 +125,7 @@ func (conn *Conn) HandshakeClient() (err error) {
 	}
 
 	S1 := S0S1S2[1 : 1536+1]
-	if ver := stream.U32BE(S1[4:8]); ver != 0 {
+	if ver := stream.BigEndian.ReadU32(S1[4:8]); ver != 0 {
 		C2 = S1
 	} else {
 		C2 = S1
@@ -164,9 +164,9 @@ func (conn *Conn) HandshakeServer() error {
 
 	S0[0] = 3
 
-	servertime := stream.U32BE(C1)
+	servertime := stream.BigEndian.ReadU32(C1)
 	serverVersion := uint32(0x0d0e0a0d)
-	clientVersion := stream.U32BE(C1[4:8])
+	clientVersion := stream.BigEndian.ReadU32(C1[4:8])
 	if clientVersion != 0 {
 		if ok, digest := hsParse1(C1, hsClientPartialKey, hsServerFullKey); !ok {
 			return fmt.Errorf("rtmp: handshake server: C1 invalid")

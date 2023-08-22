@@ -309,7 +309,7 @@ func initControlMsg(id, size, value uint32) *ChunkStream {
 		Length:   size,
 		Data:     make([]byte, size),
 	}
-	stream.PutU32BE(ret.Data[:size], value)
+	stream.BigEndian.WriteU32(ret.Data[:size], value)
 	return ret
 }
 

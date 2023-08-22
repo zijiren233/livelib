@@ -53,7 +53,7 @@ func NewHttpFLVWriter(ctx context.Context, w io.Writer, conf ...HttpFlvWriterCon
 	}
 
 	writer.ctx, writer.cancel = context.WithCancel(ctx)
-	writer.w = stream.NewWriter(w, stream.WithWriterBuffer(true))
+	writer.w = stream.NewWriter(w, stream.BigEndian)
 
 	return writer
 }
@@ -140,12 +140,12 @@ func (w *HttpFlvWriter) SendPacket(ClearCacheWhenClosed bool) error {
 
 		if err := w.w.
 			U8(typeID).
-			U24BE(uint32(dataLen)).
-			U24BE(uint32(timestamp)).
+			U24(uint32(dataLen)).
+			U24(uint32(timestamp)).
 			U8(uint8(timestampExt)).
-			U24BE(0).
+			U24(0).
 			Bytes(p.Data).
-			U32BE(uint32(preDataLen)).Error(); err != nil {
+			U32(uint32(preDataLen)).Error(); err != nil {
 			return err
 		}
 	}
