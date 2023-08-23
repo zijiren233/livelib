@@ -60,10 +60,10 @@ func Server(cmd *cobra.Command, args []string) {
 		}
 		switch fileExt {
 		case ".flv":
-			w := httpflv.NewHttpFLVWriter(c, c.Writer)
+			w := httpflv.NewHttpFLVWriter(c.Writer)
 			defer w.Close()
 			channel.AddPlayer(w)
-			w.SendPacket(true)
+			w.SendPacket()
 		case ".m3u8":
 			b, err := channel.GenM3U8PlayList(fmt.Sprintf("/%s/%s", appName, channelName))
 			if err != nil {

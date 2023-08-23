@@ -1,7 +1,7 @@
 package rtmp
 
 import (
-	"context"
+	"sync/atomic"
 	"time"
 
 	"github.com/zijiren233/livelib/av"
@@ -10,22 +10,21 @@ import (
 )
 
 type Reader struct {
-	ctx    context.Context
-	cancel context.CancelFunc
 	*av.RWBaser
 	demuxer    *flv.Demuxer
 	conn       ChunkReader
 	ReadBWInfo StaticsBW
+
+	closed uint32
 }
 
-func NewReader(ctx context.Context, conn ChunkReader) *Reader {
+func NewReader(conn ChunkReader) *Reader {
 	r := &Reader{
 		conn:       conn,
 		RWBaser:    av.NewRWBaser(),
 		demuxer:    flv.NewDemuxer(),
 		ReadBWInfo: StaticsBW{0, 0, 0, 0, 0, 0, 0, 0},
 	}
-	r.ctx, r.cancel = context.WithCancel(ctx)
 	return r
 }
 
@@ -54,13 +53,11 @@ func (v *Reader) SaveStatics(streamid uint32, length uint64, isVideoFlag bool) {
 }
 
 func (v *Reader) Read() (p *av.Packet, err error) {
+	if v.Closed() {
+		return nil, av.ErrClosed
+	}
 	var cs *core.ChunkStream
 	for {
-		select {
-		case <-v.ctx.Done():
-			return nil, v.ctx.Err()
-		default:
-		}
 		cs, err = v.conn.Read()
 		if err != nil {
 			return nil, err
@@ -85,17 +82,12 @@ func (v *Reader) Read() (p *av.Packet, err error) {
 }
 
 func (v *Reader) Closed() bool {
-	select {
-	case <-v.ctx.Done():
-		return true
-	default:
-		return false
-	}
+	return atomic.LoadUint32(&v.closed) == 1
 }
 
 func (v *Reader) Close() error {
-	if !v.Closed() {
-		v.cancel()
+	if atomic.CompareAndSwapUint32(&v.closed, 0, 1) {
+		return nil
 	}
-	return v.ctx.Err()
+	return av.ErrClosed
 }

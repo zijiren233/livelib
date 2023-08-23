@@ -1,7 +1,6 @@
 package server
 
 import (
-	"context"
 	"errors"
 	"net"
 
@@ -173,19 +172,17 @@ func (s *Server) handleConn(conn *core.Conn) (err error) {
 		}
 	}
 	if connServer.IsPublisher() {
-		ctx, cancel := context.WithCancel(context.Background())
-		defer cancel()
-		reader := rtmp.NewReader(ctx, connServer)
+		reader := rtmp.NewReader(connServer)
 		defer reader.Close()
 		if s.initHlsPlayer {
 			channel.InitHlsPlayer()
 		}
-		channel.PushStart(ctx, reader)
+		channel.PushStart(reader)
 	} else {
-		writer := rtmp.NewWriter(context.Background(), connServer)
+		writer := rtmp.NewWriter(connServer)
 		defer writer.Close()
 		channel.AddPlayer(writer)
-		writer.SendPacket(true)
+		writer.SendPacket()
 	}
 
 	return

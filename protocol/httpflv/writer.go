@@ -1,7 +1,6 @@
 package httpflv
 
 import (
-	"context"
 	"errors"
 	"io"
 	"sync"
@@ -25,10 +24,9 @@ type HttpFlvWriter struct {
 	bufSize   int
 
 	packetQueue chan *av.Packet
-	ctx         context.Context
-	cancel      context.CancelFunc
 
-	lock *sync.RWMutex
+	closed bool
+	lock   *sync.RWMutex
 }
 
 type HttpFlvWriterConf func(*HttpFlvWriter)
@@ -39,7 +37,7 @@ func WithWriterBuffer(size int) HttpFlvWriterConf {
 	}
 }
 
-func NewHttpFLVWriter(ctx context.Context, w io.Writer, conf ...HttpFlvWriterConf) *HttpFlvWriter {
+func NewHttpFLVWriter(w io.Writer, conf ...HttpFlvWriterConf) *HttpFlvWriter {
 	writer := &HttpFlvWriter{
 		RWBaser:     av.NewRWBaser(),
 		headerBuf:   make([]byte, headerLen),
@@ -52,7 +50,6 @@ func NewHttpFLVWriter(ctx context.Context, w io.Writer, conf ...HttpFlvWriterCon
 		hfwc(writer)
 	}
 
-	writer.ctx, writer.cancel = context.WithCancel(ctx)
 	writer.w = stream.NewWriter(w, stream.BigEndian)
 
 	return writer
@@ -60,53 +57,22 @@ func NewHttpFLVWriter(ctx context.Context, w io.Writer, conf ...HttpFlvWriterCon
 
 func (w *HttpFlvWriter) Write(p *av.Packet) (err error) {
 	w.lock.RLock()
+	defer w.lock.RUnlock()
 
-	if w.closed() {
-		w.lock.RUnlock()
-		return av.ErrChannelClosed
+	if w.closed {
+		return av.ErrClosed
 	}
 
 	select {
-	case <-w.ctx.Done():
-		w.lock.RUnlock()
-		return w.ctx.Err()
 	case w.packetQueue <- p:
-		w.lock.RUnlock()
 	default:
-		w.lock.RUnlock()
-		w.lock.Lock()
 		av.DropPacket(w.packetQueue)
-		w.lock.Unlock()
 	}
 	return
 }
 
-func (w *HttpFlvWriter) SendPacket(ClearCacheWhenClosed bool) error {
-	var p *av.Packet
-	var ok bool
-	for {
-		w.lock.RLock()
-		if w.closed() {
-			if len(w.packetQueue) == 0 {
-				w.lock.RUnlock()
-				return nil
-			}
-			p, ok = <-w.packetQueue
-			w.lock.RUnlock()
-		} else {
-			w.lock.RUnlock()
-			select {
-			case <-w.ctx.Done():
-				if ClearCacheWhenClosed {
-					continue
-				}
-				return nil
-			case p, ok = <-w.packetQueue:
-			}
-		}
-		if !ok {
-			return nil
-		}
+func (w *HttpFlvWriter) SendPacket() error {
+	for p := range w.packetQueue {
 		if !w.inited {
 			if err := w.w.Bytes(flv.FlvFirstHeader).Error(); err != nil {
 				return err
@@ -149,19 +115,16 @@ func (w *HttpFlvWriter) SendPacket(ClearCacheWhenClosed bool) error {
 			return err
 		}
 	}
-}
-
-func (w *HttpFlvWriter) Wait() {
-	<-w.ctx.Done()
+	return nil
 }
 
 func (w *HttpFlvWriter) Close() error {
 	w.lock.Lock()
 	defer w.lock.Unlock()
-	if w.closed() {
-		return w.ctx.Err()
+	if w.closed {
+		return av.ErrClosed
 	}
-	w.cancel()
+	w.closed = true
 	close(w.packetQueue)
 	return nil
 }
@@ -169,14 +132,5 @@ func (w *HttpFlvWriter) Close() error {
 func (w *HttpFlvWriter) Closed() bool {
 	w.lock.RLock()
 	defer w.lock.RUnlock()
-	return w.closed()
-}
-
-func (w *HttpFlvWriter) closed() bool {
-	select {
-	case <-w.ctx.Done():
-		return true
-	default:
-		return false
-	}
+	return w.closed
 }

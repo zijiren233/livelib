@@ -1,7 +1,6 @@
 package rtmp
 
 import (
-	"context"
 	"reflect"
 	"sync"
 	"time"
@@ -16,12 +15,11 @@ type Writer struct {
 	packetQueue chan *av.Packet
 	WriteBWInfo StaticsBW
 
-	ctx    context.Context
-	cancel context.CancelFunc
+	closed bool
 	lock   *sync.RWMutex
 }
 
-func NewWriter(ctx context.Context, conn ChunkWriter) *Writer {
+func NewWriter(conn ChunkWriter) *Writer {
 	w := &Writer{
 		conn:        conn,
 		RWBaser:     av.NewRWBaser(),
@@ -29,7 +27,6 @@ func NewWriter(ctx context.Context, conn ChunkWriter) *Writer {
 		WriteBWInfo: StaticsBW{0, 0, 0, 0, 0, 0, 0, 0},
 		lock:        new(sync.RWMutex),
 	}
-	w.ctx, w.cancel = context.WithCancel(ctx)
 
 	return w
 }
@@ -60,55 +57,24 @@ func (w *Writer) SaveStatics(streamid uint32, length uint64, isVideoFlag bool) {
 
 func (w *Writer) Write(p *av.Packet) (err error) {
 	w.lock.RLock()
+	defer w.lock.RUnlock()
 
-	if w.closed() {
-		w.lock.RUnlock()
-		return av.ErrChannelClosed
+	if w.closed {
+		return av.ErrClosed
 	}
 
 	select {
-	case <-w.ctx.Done():
-		w.lock.RUnlock()
-		return w.ctx.Err()
 	case w.packetQueue <- p:
-		w.lock.RUnlock()
 	default:
-		w.lock.RUnlock()
-		w.lock.Lock()
 		av.DropPacket(w.packetQueue)
-		w.lock.Unlock()
 	}
 	return
 }
 
-func (w *Writer) SendPacket(ClearCacheWhenClosed bool) error {
+func (w *Writer) SendPacket() error {
 	Flush := reflect.ValueOf(w.conn).MethodByName("Flush")
 	var cs = new(core.ChunkStream)
-	var p *av.Packet
-	var ok bool
-	for {
-		w.lock.RLock()
-		if w.closed() {
-			if len(w.packetQueue) == 0 {
-				w.lock.RUnlock()
-				return nil
-			}
-			p, ok = <-w.packetQueue
-			w.lock.RUnlock()
-		} else {
-			w.lock.RUnlock()
-			select {
-			case <-w.ctx.Done():
-				if ClearCacheWhenClosed {
-					continue
-				}
-				return nil
-			case p, ok = <-w.packetQueue:
-			}
-		}
-		if !ok {
-			return nil
-		}
+	for p := range w.packetQueue {
 		cs.Data = p.Data
 		cs.Length = uint32(len(p.Data))
 		cs.StreamID = p.StreamID
@@ -130,40 +96,27 @@ func (w *Writer) SendPacket(ClearCacheWhenClosed bool) error {
 		if err := w.conn.Write(cs); err != nil {
 			return err
 		}
-		Flush.Call(nil)
+		v := Flush.Call(nil)
+		if v[0].Interface() != nil {
+			return v[0].Interface().(error)
+		}
 	}
+	return nil
 }
 
 func (w *Writer) Closed() bool {
 	w.lock.RLock()
 	defer w.lock.RUnlock()
-	return w.closed()
-}
-
-func (w *Writer) closed() bool {
-	select {
-	case <-w.ctx.Done():
-		return true
-	default:
-		return false
-	}
-}
-
-func (w *Writer) Wait() {
-	<-w.ctx.Done()
-}
-
-func (w *Writer) Dont() <-chan struct{} {
-	return w.ctx.Done()
+	return w.closed
 }
 
 func (w *Writer) Close() error {
 	w.lock.Lock()
 	defer w.lock.Unlock()
-	if w.closed() {
-		return w.ctx.Err()
+	if w.closed {
+		return nil
 	}
-	w.cancel()
+	w.closed = true
 	close(w.packetQueue)
 	return nil
 }

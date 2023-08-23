@@ -113,6 +113,12 @@ github.com/ugorji/go/codec v1.2.11 h1:BMaWp1Bb6fHwEtbplGBGJ498wD+LKlNSl25MjdZY4d
 github.com/ugorji/go/codec v1.2.11/go.mod h1:UNopzCgEMSXjBc6AOMqYvWC1ktqTAfzJZUZgYf6w6lg=
 github.com/zijiren233/gencontainer v0.0.0-20230811040529-b988b44ccec4 h1:iJKAUOG3vKUX5G3n64g3Cy+UBkvW6QpfJN3v9sU1RJI=
 github.com/zijiren233/gencontainer v0.0.0-20230811040529-b988b44ccec4/go.mod h1:R6RhH86LMtWyq1Lxt6SI4sYE3kJv+aNDMIRPoZOTFjo=
+github.com/zijiren233/gencontainer v0.0.0-20230823114354-065794e2d2a5 h1:KZCDYBvMAjFH1tSldXKHm2nPk7Si8ZBdYz7N2cFN5Rk=
+github.com/zijiren233/gencontainer v0.0.0-20230823114354-065794e2d2a5/go.mod h1:R6RhH86LMtWyq1Lxt6SI4sYE3kJv+aNDMIRPoZOTFjo=
+github.com/zijiren233/gencontainer v0.0.0-20230823121244-f52be96bb453 h1:95ffmfaDqJ8VIQlC5DVxuJHu9bzVD217HPnI7xUR5K0=
+github.com/zijiren233/gencontainer v0.0.0-20230823121244-f52be96bb453/go.mod h1:R6RhH86LMtWyq1Lxt6SI4sYE3kJv+aNDMIRPoZOTFjo=
+github.com/zijiren233/gencontainer v0.0.0-20230823121757-a6212ea032c0 h1:lcDYAVI6BBTzyMZyyD4lIQbOOb6gMFwgStpKpOmHNHU=
+github.com/zijiren233/gencontainer v0.0.0-20230823121757-a6212ea032c0/go.mod h1:R6RhH86LMtWyq1Lxt6SI4sYE3kJv+aNDMIRPoZOTFjo=
 github.com/zijiren233/ksync v0.1.1 h1:Z9Ej01XnvwT867IUHv/nNotrxAfj7+w0aTFh+mq2DA4=
 github.com/zijiren233/ksync v0.1.1/go.mod h1:YNvvoErcbtF86Xn18J8QJ14jKOXinxFVOzyp4hn8FKw=
 github.com/zijiren233/ksync v0.2.0 h1:OyXVXbVQYFEVfWM13NApt4LMHbLQ3HTs4oYcLmqL6NE=

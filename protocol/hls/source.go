@@ -2,7 +2,6 @@ package hls
 
 import (
 	"bytes"
-	"context"
 	"fmt"
 	"sync"
 	"time"
@@ -36,12 +35,11 @@ type Source struct {
 	tsparser    *parser.CodecParser
 	packetQueue chan *av.Packet
 
-	ctx    context.Context
-	cancel context.CancelFunc
+	closed bool
 	lock   *sync.RWMutex
 }
 
-func NewSource(ctx context.Context) *Source {
+func NewSource() *Source {
 	s := &Source{
 		align:       &align{},
 		stat:        newStatus(),
@@ -55,7 +53,6 @@ func NewSource(ctx context.Context) *Source {
 		packetQueue: make(chan *av.Packet, maxQueueNum),
 		lock:        new(sync.RWMutex),
 	}
-	s.ctx, s.cancel = context.WithCancel(ctx)
 	return s
 }
 
@@ -65,53 +62,22 @@ func (source *Source) GetCacheInc() *TSCacheItem {
 
 func (source *Source) Write(p *av.Packet) (err error) {
 	source.lock.RLock()
+	defer source.lock.RUnlock()
 
-	if source.closed() {
-		source.lock.RUnlock()
-		return av.ErrChannelClosed
+	if source.closed {
+		return av.ErrClosed
 	}
 
 	select {
-	case <-source.ctx.Done():
-		source.lock.RUnlock()
-		return source.ctx.Err()
 	case source.packetQueue <- p:
-		source.lock.RUnlock()
 	default:
-		source.lock.RUnlock()
-		source.lock.Lock()
 		av.DropPacket(source.packetQueue)
-		source.lock.Unlock()
 	}
 	return
 }
 
-func (source *Source) SendPacket(ClearCacheWhenClosed bool) error {
-	var p *av.Packet
-	var ok bool
-	for {
-		source.lock.RLock()
-		if source.closed() {
-			if len(source.packetQueue) == 0 {
-				source.lock.RUnlock()
-				return nil
-			}
-			p, ok = <-source.packetQueue
-			source.lock.RUnlock()
-		} else {
-			source.lock.RUnlock()
-			select {
-			case <-source.ctx.Done():
-				if ClearCacheWhenClosed {
-					continue
-				}
-				return nil
-			case p, ok = <-source.packetQueue:
-			}
-		}
-		if !ok {
-			return nil
-		}
+func (source *Source) SendPacket() error {
+	for p := range source.packetQueue {
 		if p.IsMetadata {
 			continue
 		}
@@ -134,45 +100,32 @@ func (source *Source) SendPacket(ClearCacheWhenClosed bool) error {
 			source.tsMux(p)
 		}
 	}
+	return nil
 }
 
-func (source *Source) cleanup() {
-	source.bwriter = nil
-	source.btswriter = nil
-	source.cache = nil
-	source.tsCache = nil
-}
+// func (source *Source) cleanup() {
+// 	source.bwriter = nil
+// 	source.btswriter = nil
+// 	source.cache = nil
+// 	source.tsCache = nil
+// }
 
 func (source *Source) Close() error {
 	source.lock.Lock()
 	defer source.lock.Unlock()
-	if source.closed() {
-		return source.ctx.Err()
+	if source.closed {
+		return av.ErrClosed
 	}
-	source.cancel()
-	source.cleanup()
+	source.closed = true
+	// source.cleanup()
 	close(source.packetQueue)
-	source.cancel()
-	return source.ctx.Err()
+	return nil
 }
 
 func (source *Source) Closed() bool {
 	source.lock.RLock()
 	defer source.lock.RUnlock()
-	return source.closed()
-}
-
-func (source *Source) closed() bool {
-	select {
-	case <-source.ctx.Done():
-		return true
-	default:
-		return false
-	}
-}
-
-func (source *Source) Wait() {
-	<-source.ctx.Done()
+	return source.closed
 }
 
 func (source *Source) cut() {

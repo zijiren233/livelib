@@ -89,7 +89,7 @@ func (c *Client) PullStart(ctx context.Context) (err error) {
 
 	cache := cache.NewCache()
 
-	puller := rtmp.NewReader(ctx, c.connClient)
+	puller := rtmp.NewReader(c.connClient)
 
 	for {
 		select {
@@ -158,12 +158,9 @@ func (c *Client) PushStart(ctx context.Context, src av.Reader) error {
 	c.inPublication = true
 	defer func() { c.inPublication = false }()
 
-	ctx, cancel := context.WithCancel(ctx)
-
-	pusher := rtmp.NewWriter(ctx, c.connClient)
+	pusher := rtmp.NewWriter(c.connClient)
 
 	go func() {
-		defer cancel()
 		for {
 			select {
 			case <-ctx.Done():
@@ -181,5 +178,5 @@ func (c *Client) PushStart(ctx context.Context, src av.Reader) error {
 			}
 		}
 	}()
-	return pusher.SendPacket(true)
+	return pusher.SendPacket()
 }
