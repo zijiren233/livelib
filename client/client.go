@@ -1,11 +1,11 @@
 package client
 
 import (
-	"container/list"
 	"context"
 	"errors"
 	"fmt"
 
+	"github.com/zijiren233/gencontainer/rwmap"
 	"github.com/zijiren233/livelib/av"
 	"github.com/zijiren233/livelib/cache"
 	"github.com/zijiren233/livelib/protocol/rtmp"
@@ -18,7 +18,7 @@ type Client struct {
 
 	pulling, inPublication bool
 
-	playerList *list.List
+	players *rwmap.RWMap[av.WriteCloser, *packWriter]
 
 	gopSize int
 }
@@ -34,7 +34,7 @@ func Dial(url string, method string) (*Client, error) {
 	switch method {
 	case av.PUBLISH:
 	case av.PLAY:
-		c.playerList = list.New()
+		c.players = &rwmap.RWMap[av.WriteCloser, *packWriter]{}
 	}
 	connClient := core.NewConnClient()
 	if err := connClient.Start(url, c.method); err != nil {
@@ -105,43 +105,38 @@ func (c *Client) PullStart(ctx context.Context) (err error) {
 
 		cache.Write(p)
 
-		for e := c.playerList.Front(); e != nil; e = e.Next() {
-			player, ok := e.Value.(*packWriter)
-			if !ok {
-				c.playerList.Remove(e)
-				continue
-			}
+		c.players.Range(func(w av.WriteCloser, player *packWriter) bool {
 			if !player.Inited() {
 				if err = cache.Send(player.GetWriter()); err != nil {
-					c.playerList.Remove(e)
+					c.players.Delete(w)
 					player.GetWriter().Close()
-					continue
 				}
 				player.Init()
 			} else {
 				if err = player.GetWriter().Write(p); err != nil {
-					c.playerList.Remove(e)
+					c.players.Delete(w)
 					player.GetWriter().Close()
-					continue
 				}
 			}
-		}
+			return true
+		})
 	}
 }
 
-func (c *Client) AddPlayer(player av.WriteCloser) (e *list.Element, err error) {
+func (c *Client) AddPlayer(player av.WriteCloser) (err error) {
 	if c.method != av.PLAY {
-		return nil, ErrMethodNotSupport
+		return ErrMethodNotSupport
 	}
-	e = c.playerList.PushBack(newPackWriterCloser(player))
+	c.players.Store(player, newPackWriterCloser(player))
 	return
 }
 
-func (c *Client) DelPlayer(e *list.Element) (a any, err error) {
+func (c *Client) DelPlayer(player av.WriteCloser) (err error) {
 	if c.method != av.PLAY {
-		return nil, ErrMethodNotSupport
+		return ErrMethodNotSupport
 	}
-	return c.playerList.Remove(e), nil
+	c.players.Delete(player)
+	return nil
 }
 
 var ErrAlreadyInPublication = errors.New("already in publication")

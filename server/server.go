@@ -175,7 +175,9 @@ func (s *Server) handleConn(conn *core.Conn) (err error) {
 		reader := rtmp.NewReader(connServer)
 		defer reader.Close()
 		if s.initHlsPlayer {
-			channel.InitHlsPlayer()
+			if err := channel.InitHlsPlayer(); err != nil {
+				return err
+			}
 		}
 		channel.PushStart(reader)
 	} else {

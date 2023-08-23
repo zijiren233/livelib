@@ -30,19 +30,15 @@ func Play(cmd *cobra.Command, args []string) {
 	}
 	defer file.Close()
 
-	w := flv.NewWriter(context.Background(), file)
+	w := flv.NewWriter(file)
 
-	go func() {
-		if err := c.PullStart(context.Background()); err != nil {
-			panic(err)
-		}
-	}()
-
-	if _, err := c.AddPlayer(w); err != nil {
+	if err := c.AddPlayer(w); err != nil {
 		panic(err)
 	}
 
-	w.Wait()
+	if err := c.PullStart(context.Background()); err != nil {
+		panic(err)
+	}
 }
 
 func init() {

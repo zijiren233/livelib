@@ -1,7 +1,6 @@
 package flv
 
 import (
-	"context"
 	"errors"
 	"io"
 	"sync"
@@ -28,8 +27,7 @@ type Writer struct {
 	inited    bool
 	bufSize   int
 
-	ctx    context.Context
-	cancel context.CancelFunc
+	closed bool
 	lock   *sync.RWMutex
 }
 
@@ -41,7 +39,7 @@ func WithWriterBuffer(size int) WriterConf {
 	}
 }
 
-func NewWriter(ctx context.Context, w io.Writer, conf ...WriterConf) *Writer {
+func NewWriter(w io.Writer, conf ...WriterConf) *Writer {
 	writer := &Writer{
 		RWBaser:   av.NewRWBaser(),
 		headerBuf: make([]byte, headerLen),
@@ -53,19 +51,15 @@ func NewWriter(ctx context.Context, w io.Writer, conf ...WriterConf) *Writer {
 		fc(writer)
 	}
 
-	writer.ctx, writer.cancel = context.WithCancel(ctx)
 	writer.w = stream.NewWriter(w, stream.BigEndian)
 
 	return writer
 }
 
 func (w *Writer) Write(p *av.Packet) error {
-	w.lock.RLock()
-	if w.closed() {
-		w.lock.RUnlock()
+	if w.Closed() {
 		return errors.New("flv writer closed")
 	}
-	w.lock.RUnlock()
 	if !w.inited {
 		if err := w.w.Bytes(FlvFirstHeader).Error(); err != nil {
 			return err
@@ -110,28 +104,15 @@ func (w *Writer) Write(p *av.Packet) error {
 func (w *Writer) Closed() bool {
 	w.lock.RLock()
 	defer w.lock.RUnlock()
-	return w.closed()
-}
-
-func (w *Writer) closed() bool {
-	select {
-	case <-w.ctx.Done():
-		return true
-	default:
-		return false
-	}
+	return w.closed
 }
 
 func (w *Writer) Close() error {
 	w.lock.Lock()
 	defer w.lock.Unlock()
-	if w.closed() {
-		return errors.New("Closed")
+	if w.closed {
+		return av.ErrClosed
 	}
-	w.cancel()
+	w.closed = true
 	return nil
-}
-
-func (w *Writer) Wait() {
-	<-w.ctx.Done()
 }

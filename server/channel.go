@@ -14,7 +14,7 @@ import (
 type Channel struct {
 	channelName   string
 	inPublication bool
-	players       *rwmap.RWMap[*packWriter, struct{}]
+	players       *rwmap.RWMap[av.WriteCloser, *packWriter]
 
 	closed uint32
 
@@ -24,7 +24,7 @@ type Channel struct {
 func newChannel(channelName string) *Channel {
 	return &Channel{
 		channelName: channelName,
-		players:     &rwmap.RWMap[*packWriter, struct{}]{},
+		players:     &rwmap.RWMap[av.WriteCloser, *packWriter]{},
 	}
 }
 
@@ -93,17 +93,17 @@ func (c *Channel) PushStart(pusher av.Reader) error {
 
 		cache.Write(p)
 
-		c.players.Range(func(writer *packWriter, _ struct{}) bool {
-			if !writer.Inited() {
-				if err = cache.Send(writer.GetWriter()); err != nil {
-					c.players.Delete(writer)
-					writer.GetWriter().Close()
+		c.players.Range(func(w av.WriteCloser, player *packWriter) bool {
+			if !player.Inited() {
+				if err = cache.Send(player.GetWriter()); err != nil {
+					c.players.Delete(w)
+					player.GetWriter().Close()
 				}
-				writer.Init()
+				player.Init()
 			} else {
-				if err = writer.GetWriter().Write(p); err != nil {
-					c.players.Delete(writer)
-					writer.GetWriter().Close()
+				if err = player.GetWriter().Write(p); err != nil {
+					c.players.Delete(w)
+					player.GetWriter().Close()
 				}
 			}
 			return true
@@ -127,16 +127,15 @@ func (c *Channel) AddPlayer(w av.WriteCloser) error {
 	if c.Closed() {
 		return ErrClosed
 	}
-	player := newPackWriterCloser(w)
-	c.players.Store(player, struct{}{})
+	c.players.Store(w, newPackWriterCloser(w))
 	return nil
 }
 
-func (c *Channel) DelPlayer(e *packWriter) error {
+func (c *Channel) DelPlayer(w av.WriteCloser) error {
 	if c.Closed() {
 		return ErrClosed
 	}
-	c.players.Delete(e)
+	c.players.Delete(w)
 	return nil
 }
 
@@ -145,8 +144,8 @@ func (c *Channel) GetPlayers() ([]av.WriteCloser, error) {
 		return nil, ErrClosed
 	}
 	players := make([]av.WriteCloser, 0)
-	c.players.Range(func(key *packWriter, _ struct{}) bool {
-		players = append(players, key.GetWriter())
+	c.players.Range(func(w av.WriteCloser, _ *packWriter) bool {
+		players = append(players, w)
 		return true
 	})
 	return players, nil
@@ -159,7 +158,9 @@ func (c *Channel) InitHlsPlayer() error {
 	if c.hlsWriter == nil || c.hlsWriter.Closed() {
 		c.hlsWriter = hls.NewSource()
 		go c.hlsWriter.SendPacket()
-		c.AddPlayer(c.hlsWriter)
+		if err := c.AddPlayer(c.hlsWriter); err != nil {
+			return err
+		}
 	}
 	return nil
 }
