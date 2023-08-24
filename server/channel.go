@@ -112,10 +112,14 @@ func (c *Channel) PushStart(pusher av.Reader) error {
 }
 
 func (c *Channel) Close() error {
-	if atomic.CompareAndSwapUint32(&c.closed, 0, 1) {
-		return nil
+	if !atomic.CompareAndSwapUint32(&c.closed, 0, 1) {
+		return ErrClosed
 	}
-	c.players.Clear()
+	c.players.Range(func(w av.WriteCloser, player *packWriter) bool {
+		c.players.Delete(w)
+		player.GetWriter().Close()
+		return true
+	})
 	return nil
 }
 

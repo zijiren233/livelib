@@ -2,80 +2,81 @@ package server
 
 import (
 	"errors"
+	"sync/atomic"
 
-	"github.com/zijiren233/ksync"
+	"github.com/zijiren233/gencontainer/rwmap"
 )
 
 type App struct {
-	appName      string
-	channelsLock *ksync.Kmutex
-	channels     map[string]*Channel
-	closed       bool
+	appName  string
+	channels *rwmap.RWMap[string, *Channel]
+	closed   uint32
 }
 
 func NewApp(appName string) *App {
 	return &App{
-		appName:      appName,
-		channelsLock: ksync.NewKmutex(),
-		channels:     make(map[string]*Channel),
+		appName:  appName,
+		channels: &rwmap.RWMap[string, *Channel]{},
 	}
 }
 
-func (a *App) GetOrNewChannel(channelName string) *Channel {
-	a.channelsLock.Lock(channelName)
-	defer a.channelsLock.Unlock(channelName)
-	return a.getOrNewChannel(channelName)
-}
-
-func (a *App) getOrNewChannel(channelName string) *Channel {
-	if c, ok := a.channels[channelName]; ok {
-		return c
-	} else {
-		c := newChannel(channelName)
-		a.channels[channelName] = c
-		return c
+func (a *App) GetOrNewChannel(channelName string) (*Channel, error) {
+	if a.Closed() {
+		return nil, ErrClosed
 	}
+	c, _ := a.channels.LoadOrStore(channelName, newChannel(channelName))
+	return c, nil
 }
 
 var ErrChannelNotFound = errors.New("channel not found")
 
 func (a *App) GetChannel(channelName string) (*Channel, error) {
-	a.channelsLock.Lock(channelName)
-	defer a.channelsLock.Unlock(channelName)
-	if c, ok := a.channels[channelName]; ok {
-		return c, nil
-	} else {
+	if a.Closed() {
+		return nil, ErrClosed
+	}
+	c, ok := a.channels.Load(channelName)
+	if !ok {
 		return nil, ErrChannelNotFound
 	}
+	return c, nil
+
 }
 
-func (a *App) GetChannels() map[string]*Channel {
-	return a.channels
+func (a *App) GetChannels() ([]*Channel, error) {
+	if a.Closed() {
+		return nil, ErrClosed
+	}
+	cs := make([]*Channel, 0)
+	a.channels.Range(func(s string, c *Channel) bool {
+		cs = append(cs, c)
+		return true
+	})
+	return cs, nil
 }
 
 func (a *App) DelChannel(channelName string) error {
-	a.channelsLock.Lock(channelName)
-	defer a.channelsLock.Unlock(channelName)
-	return a.delChannel(channelName)
-}
-
-func (a *App) delChannel(channelName string) error {
-	if c, ok := a.channels[channelName]; ok {
-		c.Close()
-		delete(a.channels, channelName)
-		return nil
-	} else {
+	if a.Closed() {
+		return ErrClosed
+	}
+	c, ok := a.channels.LoadAndDelete(channelName)
+	if !ok {
 		return ErrChannelNotFound
 	}
+	return c.Close()
 }
 
 func (a *App) Close() error {
-	if a.closed {
+	if !atomic.CompareAndSwapUint32(&a.closed, 0, 1) {
 		return nil
 	}
-	a.closed = true
-	for k := range a.channels {
-		a.delChannel(k)
-	}
+	a.channels.Range(func(s string, c *Channel) bool {
+		a.channels.Delete(s)
+		c.Close()
+		return true
+	})
 	return nil
+}
+
+func (a *App) Closed() bool {
+	return atomic.LoadUint32(&a.closed) == 1
 }

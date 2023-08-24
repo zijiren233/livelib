@@ -103,7 +103,6 @@ func (conn *Conn) HandshakeClient() (err error) {
 	C0C1C2 := random[:1536*2+1]
 	C0 := C0C1C2[:1]
 	C0C1 := C0C1C2[:1536+1]
-	C2 := C0C1C2[1536+1:]
 
 	S0S1S2 := random[1536*2+1:]
 
@@ -125,6 +124,7 @@ func (conn *Conn) HandshakeClient() (err error) {
 	}
 
 	S1 := S0S1S2[1 : 1536+1]
+	var C2 []byte
 	if ver := stream.BigEndian.ReadU32(S1[4:8]); ver != 0 {
 		C2 = S1
 	} else {

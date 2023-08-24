@@ -9,17 +9,15 @@ import (
 	"github.com/zijiren233/livelib/protocol/amf"
 )
 
-var (
-	publishLive   = "live"
-	publishRecord = "record"
-	publishAppend = "append"
+const (
+	publishLive = "live"
 )
 
 var (
 	ErrReq = fmt.Errorf("req error")
 )
 
-var (
+const (
 	cmdConnect       = "connect"
 	cmdFcpublish     = "FCPublish"
 	cmdReleaseStream = "releaseStream"
@@ -129,14 +127,6 @@ func (connServer *ConnServer) connect(vs []interface{}) error {
 			}
 		}
 	}
-	return nil
-}
-
-func (connServer *ConnServer) releaseStream(vs []interface{}) error {
-	return nil
-}
-
-func (connServer *ConnServer) fcPublish(vs []interface{}) error {
 	return nil
 }
 

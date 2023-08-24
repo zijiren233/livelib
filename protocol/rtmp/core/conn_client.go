@@ -14,14 +14,11 @@ import (
 	"github.com/zijiren233/livelib/protocol/amf"
 )
 
-var (
+const (
 	respResult     = "_result"
-	respError      = "_error"
 	onStatus       = "onStatus"
 	publishStart   = "NetStream.Publish.Start"
-	playStart      = "NetStream.Play.Start"
 	connectSuccess = "NetConnection.Connect.Success"
-	onBWDone       = "onBWDone"
 )
 
 var (
@@ -29,7 +26,6 @@ var (
 )
 
 type ConnClient struct {
-	done       bool
 	transID    int
 	url        string
 	app        string

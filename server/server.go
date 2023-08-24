@@ -4,14 +4,13 @@ import (
 	"errors"
 	"net"
 
-	"github.com/zijiren233/ksync"
+	"github.com/zijiren233/gencontainer/rwmap"
 	"github.com/zijiren233/livelib/protocol/rtmp"
 	"github.com/zijiren233/livelib/protocol/rtmp/core"
 )
 
 type Server struct {
-	appsLock               *ksync.Kmutex
-	apps                   map[string]*App
+	apps                   *rwmap.RWMap[string, *App]
 	connBufferSize         int
 	parseChannelFunc       parseChannelFunc
 	initHlsPlayer          bool
@@ -22,8 +21,7 @@ type parseChannelFunc func(ReqAppName, ReqChannelName string, IsPublisher bool) 
 
 func DefaultRtmpServer() *Server {
 	return &Server{
-		appsLock:               ksync.NewKmutex(),
-		apps:                   make(map[string]*App),
+		apps:                   &rwmap.RWMap[string, *App]{},
 		connBufferSize:         4096,
 		initHlsPlayer:          false,
 		autoCreateAppOrChannel: false,
@@ -69,49 +67,26 @@ func (s *Server) SetParseChannelFunc(f parseChannelFunc) {
 }
 
 func (s *Server) GetOrNewApp(appName string) *App {
-	s.appsLock.Lock(appName)
-	defer s.appsLock.Unlock(appName)
-	return s.getOrNewApp(appName)
-}
-
-func (s *Server) getOrNewApp(appName string) *App {
-	if app, ok := s.apps[appName]; ok {
-		return app
-	} else {
-		a := NewApp(appName)
-		s.apps[appName] = a
-		return a
-	}
+	a, _ := s.apps.LoadOrStore(appName, NewApp(appName))
+	return a
 }
 
 var ErrAppNotFount = errors.New("app not found")
 
 func (s *Server) GetApp(appName string) (*App, error) {
-	s.appsLock.Lock(appName)
-	defer s.appsLock.Unlock(appName)
-	return s.getApp(appName)
-}
-
-func (s *Server) getApp(appName string) (*App, error) {
-	if a, ok := s.apps[appName]; ok {
-		return a, nil
-	} else {
+	a, ok := s.apps.Load(appName)
+	if !ok {
 		return nil, ErrAppNotFount
 	}
+	return a, nil
 }
 
 func (s *Server) DelApp(appName string) error {
-	s.appsLock.Lock(appName)
-	defer s.appsLock.Unlock(appName)
-	return s.delApp(appName)
-}
-
-func (s *Server) delApp(appName string) error {
-	app, ok := s.apps[appName]
-	if !ok {
+	a, loaded := s.apps.LoadAndDelete(appName)
+	if !loaded {
 		return ErrAppNotFount
 	}
-	return app.Close()
+	return a.Close()
 }
 
 func (s *Server) GetChannelWithApp(appName, channelName string) (*Channel, error) {
@@ -122,7 +97,7 @@ func (s *Server) GetChannelWithApp(appName, channelName string) (*Channel, error
 	return a.GetChannel(channelName)
 }
 
-func (s *Server) GetOrNewChannelWithApp(appName, channelName string) *Channel {
+func (s *Server) GetOrNewChannelWithApp(appName, channelName string) (*Channel, error) {
 	return s.GetOrNewApp(appName).GetOrNewChannel(channelName)
 }
 
@@ -143,31 +118,31 @@ func (s *Server) handleConn(conn *core.Conn) (err error) {
 		return err
 	}
 	connServer := core.NewConnServer(conn)
+	defer connServer.Close()
 
 	if err = connServer.ReadInitMsg(); err != nil {
-		conn.Close()
 		return
 	}
 	var app, name = connServer.ConnInfo.App, connServer.PublishInfo.Name
 	if s.parseChannelFunc != nil {
 		app, name, err = s.parseChannelFunc(connServer.ConnInfo.App, connServer.PublishInfo.Name, connServer.IsPublisher())
 		if err != nil {
-			conn.Close()
 			return err
 		}
 	}
 	var channel *Channel
 	if s.autoCreateAppOrChannel {
-		channel = s.GetOrNewChannelWithApp(app, name)
+		channel, err = s.GetOrNewChannelWithApp(app, name)
+		if err != nil {
+			return err
+		}
 	} else {
 		app, err := s.GetApp(app)
 		if err != nil {
-			conn.Close()
 			return err
 		}
 		channel, err = app.GetChannel(name)
 		if err != nil {
-			conn.Close()
 			return err
 		}
 	}
