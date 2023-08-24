@@ -31,7 +31,7 @@ type Source struct {
 	stat        *status
 	align       *align
 	cache       *audioCache
-	tsCache     *TSCacheItem
+	tsCache     *TSCache
 	tsparser    *parser.CodecParser
 	packetQueue chan *av.Packet
 
@@ -56,7 +56,7 @@ func NewSource() *Source {
 	return s
 }
 
-func (source *Source) GetCacheInc() *TSCacheItem {
+func (source *Source) GetCacheInc() *TSCache {
 	return source.tsCache
 }
 

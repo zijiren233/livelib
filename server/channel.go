@@ -3,6 +3,7 @@ package server
 import (
 	"bytes"
 	"errors"
+	"sync"
 	"sync/atomic"
 
 	"github.com/zijiren233/gencontainer/rwmap"
@@ -13,10 +14,11 @@ import (
 
 type Channel struct {
 	channelName   string
-	inPublication bool
+	inPublication uint32
 	players       *rwmap.RWMap[av.WriteCloser, *packWriter]
 
-	closed uint32
+	closed bool
+	lock   *sync.RWMutex
 
 	hlsWriter *hls.Source
 }
@@ -24,12 +26,13 @@ type Channel struct {
 func newChannel(channelName string) *Channel {
 	return &Channel{
 		channelName: channelName,
+		lock:        &sync.RWMutex{},
 		players:     &rwmap.RWMap[av.WriteCloser, *packWriter]{},
 	}
 }
 
 func (c *Channel) InPublication() bool {
-	return c.inPublication
+	return atomic.LoadUint32(&c.inPublication) == 1
 }
 
 var ErrPusherAlreadyInPublication = errors.New("pusher already in publication")
@@ -67,18 +70,14 @@ func (c *Channel) PushStart(pusher av.Reader) error {
 	if c.Closed() {
 		return ErrClosed
 	}
-	if c.inPublication {
+	if !atomic.CompareAndSwapUint32(&c.inPublication, 0, 1) {
 		return ErrPusherAlreadyInPublication
 	}
+	defer atomic.CompareAndSwapUint32(&c.inPublication, 1, 0)
 
 	if pusher == nil {
 		return ErrPusherIsNil
 	}
-
-	c.inPublication = true
-	defer func() {
-		c.inPublication = false
-	}()
 
 	cache := cache.NewCache()
 
@@ -112,9 +111,12 @@ func (c *Channel) PushStart(pusher av.Reader) error {
 }
 
 func (c *Channel) Close() error {
-	if !atomic.CompareAndSwapUint32(&c.closed, 0, 1) {
+	c.lock.Lock()
+	defer c.lock.Unlock()
+	if c.closed {
 		return ErrClosed
 	}
+	c.closed = true
 	c.players.Range(func(w av.WriteCloser, player *packWriter) bool {
 		c.players.Delete(w)
 		player.GetWriter().Close()
@@ -124,11 +126,23 @@ func (c *Channel) Close() error {
 }
 
 func (c *Channel) Closed() bool {
-	return atomic.LoadUint32(&c.closed) == 1
+	c.lock.RLock()
+	defer c.lock.RUnlock()
+	return c.closed
 }
 
 func (c *Channel) AddPlayer(w av.WriteCloser) error {
-	if c.Closed() {
+	c.lock.RLock()
+	defer c.lock.RUnlock()
+	if c.closed {
+		return ErrClosed
+	}
+	c.players.Store(w, newPackWriterCloser(w))
+	return nil
+}
+
+func (c *Channel) addPlayer(w av.WriteCloser) error {
+	if c.closed {
 		return ErrClosed
 	}
 	c.players.Store(w, newPackWriterCloser(w))
@@ -136,7 +150,9 @@ func (c *Channel) AddPlayer(w av.WriteCloser) error {
 }
 
 func (c *Channel) DelPlayer(w av.WriteCloser) error {
-	if c.Closed() {
+	c.lock.RLock()
+	defer c.lock.RUnlock()
+	if c.closed {
 		return ErrClosed
 	}
 	c.players.Delete(w)
@@ -144,7 +160,9 @@ func (c *Channel) DelPlayer(w av.WriteCloser) error {
 }
 
 func (c *Channel) GetPlayers() ([]av.WriteCloser, error) {
-	if c.Closed() {
+	c.lock.RLock()
+	defer c.lock.RUnlock()
+	if c.closed {
 		return nil, ErrClosed
 	}
 	players := make([]av.WriteCloser, 0)
@@ -156,40 +174,62 @@ func (c *Channel) GetPlayers() ([]av.WriteCloser, error) {
 }
 
 func (c *Channel) InitHlsPlayer() error {
-	if c.Closed() {
+	c.lock.RLock()
+	if c.closed {
+		c.lock.RUnlock()
 		return ErrClosed
 	}
-	if c.hlsWriter == nil || c.hlsWriter.Closed() {
+	if !c.initdHlsPlayer() {
+		c.lock.RUnlock()
+
+		c.lock.Lock()
+		defer c.lock.Unlock()
+		if c.initdHlsPlayer() {
+			return nil
+		}
 		c.hlsWriter = hls.NewSource()
 		go c.hlsWriter.SendPacket()
-		if err := c.AddPlayer(c.hlsWriter); err != nil {
+		if err := c.addPlayer(c.hlsWriter); err != nil {
+			c.hlsWriter.Close()
 			return err
 		}
+		return nil
 	}
+	c.lock.RUnlock()
 	return nil
 }
 
 func (c *Channel) InitdHlsPlayer() bool {
+	c.lock.RLock()
+	defer c.lock.RUnlock()
+	return c.initdHlsPlayer()
+}
+
+func (c *Channel) initdHlsPlayer() bool {
 	return c.hlsWriter != nil && !c.hlsWriter.Closed()
 }
 
 var ErrHlsPlayerNotInit = errors.New("hls player not init")
 
 func (c *Channel) GenM3U8PlayList(tsBashPath string) (*bytes.Buffer, error) {
-	if c.Closed() {
+	c.lock.RLock()
+	defer c.lock.RUnlock()
+	if c.closed {
 		return nil, ErrClosed
 	}
-	if !c.InitdHlsPlayer() {
+	if !c.initdHlsPlayer() {
 		return nil, ErrHlsPlayerNotInit
 	}
 	return c.hlsWriter.GetCacheInc().GenM3U8PlayList(tsBashPath), nil
 }
 
 func (c *Channel) GetTsFile(tsName string) ([]byte, error) {
-	if c.Closed() {
+	c.lock.RLock()
+	defer c.lock.RUnlock()
+	if c.closed {
 		return nil, ErrClosed
 	}
-	if !c.InitdHlsPlayer() {
+	if !c.initdHlsPlayer() {
 		return nil, ErrHlsPlayerNotInit
 	}
 	t, err := c.hlsWriter.GetCacheInc().GetItem(tsName)

@@ -2,37 +2,42 @@ package hls
 
 import (
 	"bytes"
-	"container/list"
 	"fmt"
 	"io/fs"
 	"path"
 	"strings"
+	"sync"
+
+	"github.com/zijiren233/gencontainer/dllist"
 )
 
 const (
 	maxTSCacheNum = 3
 )
 
-type TSCacheItem struct {
-	num int
-	ll  *list.List
+type TSCache struct {
+	max  int
+	l    *dllist.Dllist[*TSItem]
+	lock *sync.RWMutex
 }
 
-func NewTSCacheItem() *TSCacheItem {
-	return &TSCacheItem{
-		ll:  list.New(),
-		num: maxTSCacheNum,
+func NewTSCacheItem() *TSCache {
+	return &TSCache{
+		l:    dllist.New[*TSItem](),
+		max:  maxTSCacheNum,
+		lock: new(sync.RWMutex),
 	}
 }
 
-// TODO: found data race, fix it
-func (tcCacheItem *TSCacheItem) GenM3U8PlayList(tsBasePath string) *bytes.Buffer {
+func (tc *TSCache) GenM3U8PlayList(tsBasePath string) *bytes.Buffer {
 	var seq int
 	var getSeq bool
 	var maxDuration int
 	m3u8body := bytes.NewBuffer(nil)
-	for e := tcCacheItem.ll.Front(); e != nil; e = e.Next() {
-		item := e.Value.(*TSItem)
+	tc.lock.RLock()
+	defer tc.lock.RUnlock()
+	for e := tc.l.Front(); e != nil; e = e.Next() {
+		item := e.Value
 		if item.Duration > maxDuration {
 			maxDuration = item.Duration
 		}
@@ -50,19 +55,23 @@ func (tcCacheItem *TSCacheItem) GenM3U8PlayList(tsBasePath string) *bytes.Buffer
 	return w
 }
 
-func (tcCacheItem *TSCacheItem) PushItem(item *TSItem) {
-	if tcCacheItem.ll.Len() == tcCacheItem.num {
-		e := tcCacheItem.ll.Front()
-		tcCacheItem.ll.Remove(e)
+func (tc *TSCache) PushItem(item *TSItem) {
+	tc.lock.Lock()
+	defer tc.lock.Unlock()
+	if tc.l.Len() == tc.max {
+		e := tc.l.Front()
+		tc.l.Remove(e)
 	}
 	item.TsName = strings.TrimSuffix(item.TsName, ".ts")
-	tcCacheItem.ll.PushBack(item)
+	tc.l.PushBack(item)
 }
 
-func (tcCacheItem *TSCacheItem) GetItem(tsName string) (*TSItem, error) {
+func (tc *TSCache) GetItem(tsName string) (*TSItem, error) {
 	tsName = strings.TrimSuffix(tsName, ".ts")
-	for e := tcCacheItem.ll.Front(); e != nil; e = e.Next() {
-		item := e.Value.(*TSItem)
+	tc.lock.RLock()
+	defer tc.lock.RUnlock()
+	for e := tc.l.Front(); e != nil; e = e.Next() {
+		item := e.Value
 		if item.TsName == tsName {
 			return item, nil
 		}
