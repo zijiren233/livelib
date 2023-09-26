@@ -20,6 +20,22 @@ func NewApp(appName string) *App {
 	}
 }
 
+var (
+	ErrChannelAlreadyExists = errors.New("channel already exists")
+)
+
+func (a *App) NewChannel(channelName string) (*Channel, error) {
+	if a.Closed() {
+		return nil, ErrClosed
+	}
+	c := newChannel(channelName)
+	_, loaded := a.channels.LoadOrStore(channelName, c)
+	if loaded {
+		return nil, ErrChannelAlreadyExists
+	}
+	return c, nil
+}
+
 func (a *App) GetOrNewChannel(channelName string) (*Channel, error) {
 	if a.Closed() {
 		return nil, ErrClosed

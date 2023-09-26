@@ -3,6 +3,7 @@ package server
 import (
 	"errors"
 	"net"
+	"sync/atomic"
 
 	"github.com/zijiren233/gencontainer/rwmap"
 	"github.com/zijiren233/livelib/protocol/rtmp"
@@ -11,7 +12,7 @@ import (
 
 type Server struct {
 	apps                   *rwmap.RWMap[string, *App]
-	connBufferSize         int
+	connBufferSize         int32
 	parseChannelFunc       parseChannelFunc
 	initHlsPlayer          bool
 	autoCreateAppOrChannel bool
@@ -36,7 +37,7 @@ func WithParseChannelFunc(f parseChannelFunc) ServerConf {
 	}
 }
 
-func WithConnBufferSize(bufferSize int) ServerConf {
+func WithConnBufferSize(bufferSize int32) ServerConf {
 	return func(s *Server) {
 		s.connBufferSize = bufferSize
 	}
@@ -64,6 +65,23 @@ func NewRtmpServer(c ...ServerConf) *Server {
 
 func (s *Server) SetParseChannelFunc(f parseChannelFunc) {
 	s.parseChannelFunc = f
+}
+
+func (s *Server) SetConnBufferSize(bufferSize int32) {
+	atomic.StoreInt32(&s.connBufferSize, bufferSize)
+}
+
+var (
+	ErrAppAlreadyExists = errors.New("app already exists")
+)
+
+func (s *Server) NewApp(appName string) (*App, error) {
+	a := NewApp(appName)
+	_, loaded := s.apps.LoadOrStore(appName, a)
+	if loaded {
+		return nil, ErrAppAlreadyExists
+	}
+	return a, nil
 }
 
 func (s *Server) GetOrNewApp(appName string) *App {
@@ -107,7 +125,7 @@ func (s *Server) Serve(l net.Listener) error {
 		if err != nil {
 			continue
 		}
-		conn := core.NewConn(netconn, s.connBufferSize)
+		conn := core.NewConn(netconn, int(atomic.LoadInt32(&s.connBufferSize)))
 		go s.handleConn(conn)
 	}
 }
