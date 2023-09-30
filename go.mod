@@ -8,7 +8,6 @@ require (
 	github.com/soheilhy/cmux v0.1.5
 	github.com/spf13/cobra v1.7.0
 	github.com/zijiren233/gencontainer v0.0.0-20230930061950-82324a07eacb
-	github.com/zijiren233/ksync v0.2.0
 	github.com/zijiren233/stream v0.5.1
 )
 

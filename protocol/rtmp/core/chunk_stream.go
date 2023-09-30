@@ -4,7 +4,6 @@ import (
 	"fmt"
 
 	"github.com/zijiren233/livelib/av"
-	"github.com/zijiren233/livelib/utils/pool"
 )
 
 type ChunkStream struct {
@@ -27,11 +26,11 @@ func (chunkStream *ChunkStream) full() bool {
 	return chunkStream.got
 }
 
-func (chunkStream *ChunkStream) new(pool *pool.Pool) {
+func (chunkStream *ChunkStream) init() {
 	chunkStream.got = false
 	chunkStream.index = 0
 	chunkStream.remain = chunkStream.Length
-	chunkStream.Data = pool.Get(int(chunkStream.Length))
+	chunkStream.Data = make([]byte, chunkStream.Length)
 }
 
 func (chunkStream *ChunkStream) writeHeader(w *ReadWriter) error {
@@ -100,7 +99,7 @@ END:
 	return nil
 }
 
-func (chunkStream *ChunkStream) writeChunk(w *ReadWriter, chunkSize int) error {
+func (chunkStream *ChunkStream) writeChunk(w *ReadWriter, chunkSize uint32) error {
 	if chunkStream.TypeID == av.TAG_AUDIO {
 		chunkStream.CSID = 4
 	} else if chunkStream.TypeID == av.TAG_VIDEO ||
@@ -110,7 +109,7 @@ func (chunkStream *ChunkStream) writeChunk(w *ReadWriter, chunkSize int) error {
 	}
 
 	totalLen := uint32(0)
-	numChunks := (chunkStream.Length / uint32(chunkSize))
+	numChunks := (chunkStream.Length / chunkSize)
 	for i := uint32(0); i <= numChunks; i++ {
 		if totalLen == chunkStream.Length {
 			break
@@ -123,15 +122,14 @@ func (chunkStream *ChunkStream) writeChunk(w *ReadWriter, chunkSize int) error {
 		if err := chunkStream.writeHeader(w); err != nil {
 			return err
 		}
-		inc := uint32(chunkSize)
-		start := uint32(i) * uint32(chunkSize)
+		inc := chunkSize
+		start := i * chunkSize
 		if uint32(len(chunkStream.Data))-start <= inc {
 			inc = uint32(len(chunkStream.Data)) - start
 		}
 		totalLen += inc
 		end := start + inc
-		buf := chunkStream.Data[start:end]
-		if _, err := w.Write(buf); err != nil {
+		if _, err := w.Write(chunkStream.Data[start:end]); err != nil {
 			return err
 		}
 	}

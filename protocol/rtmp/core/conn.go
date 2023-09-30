@@ -7,8 +7,6 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/zijiren233/ksync"
-	"github.com/zijiren233/livelib/utils/pool"
 	"github.com/zijiren233/stream"
 )
 
@@ -31,8 +29,6 @@ type Conn struct {
 	received            uint32
 	ackReceived         uint32
 	rw                  *ReadWriter
-	pool                *pool.Pool
-	lock                *ksync.Kmutex
 	chunks              map[uint32]*ChunkStream
 }
 
@@ -43,9 +39,7 @@ func NewConn(c net.Conn, bufferSize int) *Conn {
 		remoteChunkSize:     128,
 		windowAckSize:       2500000,
 		remoteWindowAckSize: 2500000,
-		pool:                pool.NewPool(),
 		rw:                  NewReadWriter(c, bufferSize),
-		lock:                ksync.NewKmutex(),
 		chunks:              make(map[uint32]*ChunkStream),
 	}
 }
@@ -75,8 +69,6 @@ func (conn *Conn) readNextChunk() (chunkStream *ChunkStream, err error) {
 	}
 	format := h >> 6
 	csid := h & 0x3f
-	conn.lock.Lock(csid)
-	defer conn.lock.Unlock(csid)
 	chunkStream, ok := conn.chunks[csid]
 	if !ok {
 		chunkStream = &ChunkStream{CSID: csid}
@@ -129,7 +121,7 @@ func (conn *Conn) readNextChunk() (chunkStream *ChunkStream, err error) {
 		} else {
 			chunkStream.exted = false
 		}
-		chunkStream.new(conn.pool)
+		chunkStream.init()
 	case 1:
 		chunkStream.Format = chunkStream.tmpFromat
 		timeStamp, err := conn.rw.ReadUintBE(3)
@@ -155,7 +147,7 @@ func (conn *Conn) readNextChunk() (chunkStream *ChunkStream, err error) {
 		}
 		chunkStream.timeDelta = timeStamp
 		chunkStream.Timestamp += timeStamp
-		chunkStream.new(conn.pool)
+		chunkStream.init()
 	case 2:
 		chunkStream.Format = chunkStream.tmpFromat
 		timeStamp, err := conn.rw.ReadUintBE(3)
@@ -173,7 +165,7 @@ func (conn *Conn) readNextChunk() (chunkStream *ChunkStream, err error) {
 		}
 		chunkStream.timeDelta = timeStamp
 		chunkStream.Timestamp += timeStamp
-		chunkStream.new(conn.pool)
+		chunkStream.init()
 	case 3:
 		if chunkStream.remain == 0 {
 			switch chunkStream.Format {
@@ -197,7 +189,7 @@ func (conn *Conn) readNextChunk() (chunkStream *ChunkStream, err error) {
 				}
 				chunkStream.Timestamp += timedet
 			}
-			chunkStream.new(conn.pool)
+			chunkStream.init()
 		} else {
 			if chunkStream.exted {
 				b, err := conn.rw.Peek(4)
@@ -219,8 +211,7 @@ func (conn *Conn) readNextChunk() (chunkStream *ChunkStream, err error) {
 		size = chunkSize
 	}
 
-	buf := chunkStream.Data[chunkStream.index : chunkStream.index+size]
-	if n, err := conn.rw.Read(buf); err != nil {
+	if n, err := conn.rw.Read(chunkStream.Data[chunkStream.index : chunkStream.index+size]); err != nil {
 		return chunkStream, err
 	} else {
 		chunkStream.index += uint32(n)
@@ -238,7 +229,7 @@ func (conn *Conn) Write(c *ChunkStream) error {
 		atomic.StoreUint32(&conn.chunkSize, binary.BigEndian.Uint32(c.Data))
 	}
 
-	return c.writeChunk(conn.rw, int(atomic.LoadUint32(&conn.chunkSize)))
+	return c.writeChunk(conn.rw, atomic.LoadUint32(&conn.chunkSize))
 }
 
 func (conn *Conn) Flush() error {
@@ -295,7 +286,7 @@ func (conn *Conn) ack(size uint32) {
 	}
 	if ackReceived := atomic.LoadUint32(&conn.ackReceived); ackReceived >= atomic.LoadUint32(&conn.remoteWindowAckSize) {
 		cs := conn.NewAck(ackReceived)
-		cs.writeChunk(conn.rw, int(atomic.LoadUint32(&conn.chunkSize)))
+		cs.writeChunk(conn.rw, atomic.LoadUint32(&conn.chunkSize))
 		atomic.CompareAndSwapUint32(&conn.ackReceived, ackReceived, 0)
 	}
 }
