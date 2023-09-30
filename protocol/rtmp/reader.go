@@ -10,7 +10,6 @@ import (
 )
 
 type Reader struct {
-	*av.RWBaser
 	demuxer    *flv.Demuxer
 	conn       ChunkReader
 	ReadBWInfo StaticsBW
@@ -21,7 +20,6 @@ type Reader struct {
 func NewReader(conn ChunkReader) *Reader {
 	r := &Reader{
 		conn:       conn,
-		RWBaser:    av.NewRWBaser(),
 		demuxer:    flv.NewDemuxer(),
 		ReadBWInfo: StaticsBW{0, 0, 0, 0, 0, 0, 0, 0},
 	}

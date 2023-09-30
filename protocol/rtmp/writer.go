@@ -7,10 +7,11 @@ import (
 
 	"github.com/zijiren233/livelib/av"
 	"github.com/zijiren233/livelib/protocol/rtmp/core"
+	"github.com/zijiren233/livelib/utils"
 )
 
 type Writer struct {
-	*av.RWBaser
+	t           *utils.Timestamp
 	conn        ChunkWriter
 	packetQueue chan *av.Packet
 	WriteBWInfo StaticsBW
@@ -22,7 +23,7 @@ type Writer struct {
 func NewWriter(conn ChunkWriter) *Writer {
 	w := &Writer{
 		conn:        conn,
-		RWBaser:     av.NewRWBaser(),
+		t:           utils.NewTimestamp(),
 		packetQueue: make(chan *av.Packet, maxQueueNum),
 		WriteBWInfo: StaticsBW{0, 0, 0, 0, 0, 0, 0, 0},
 		lock:        new(sync.RWMutex),
@@ -79,7 +80,7 @@ func (w *Writer) SendPacket() error {
 		cs.Length = uint32(len(p.Data))
 		cs.StreamID = p.StreamID
 		cs.Timestamp = p.TimeStamp
-		cs.Timestamp += w.BaseTimeStamp()
+		cs.Timestamp += w.t.BaseTimeStamp()
 
 		if p.IsVideo {
 			cs.TypeID = av.TAG_VIDEO
@@ -92,7 +93,7 @@ func (w *Writer) SendPacket() error {
 		}
 
 		w.SaveStatics(p.StreamID, uint64(cs.Length), p.IsVideo)
-		w.RecTimeStamp(cs.Timestamp, cs.TypeID)
+		w.t.RecTimeStamp(cs.Timestamp, cs.TypeID)
 		if err := w.conn.Write(cs); err != nil {
 			return err
 		}

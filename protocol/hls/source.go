@@ -21,7 +21,6 @@ const (
 )
 
 type Source struct {
-	*av.RWBaser
 	seq         int
 	bwriter     *bytes.Buffer
 	btswriter   *bytes.Buffer
@@ -43,7 +42,6 @@ func NewSource() *Source {
 	s := &Source{
 		align:       &align{},
 		stat:        newStatus(),
-		RWBaser:     av.NewRWBaser(),
 		cache:       newAudioCache(),
 		demuxer:     flv.NewDemuxer(),
 		muxer:       ts.NewMuxer(),

@@ -8,6 +8,7 @@ import (
 	"github.com/zijiren233/livelib/av"
 	"github.com/zijiren233/livelib/container/flv"
 	"github.com/zijiren233/livelib/protocol/amf"
+	"github.com/zijiren233/livelib/utils"
 	"github.com/zijiren233/stream"
 )
 
@@ -17,7 +18,7 @@ const (
 )
 
 type HttpFlvWriter struct {
-	*av.RWBaser
+	t         *utils.Timestamp
 	headerBuf []byte
 	w         *stream.Writer
 	inited    bool
@@ -39,7 +40,7 @@ func WithWriterBuffer(size int) HttpFlvWriterConf {
 
 func NewHttpFLVWriter(w io.Writer, conf ...HttpFlvWriterConf) *HttpFlvWriter {
 	writer := &HttpFlvWriter{
-		RWBaser:     av.NewRWBaser(),
+		t:           utils.NewTimestamp(),
 		headerBuf:   make([]byte, headerLen),
 		bufSize:     1024,
 		packetQueue: make(chan *av.Packet, maxQueueNum),
@@ -98,8 +99,8 @@ func (w *HttpFlvWriter) SendPacket() error {
 			return errors.New("not allowed packet type")
 		}
 		dataLen := len(p.Data)
-		timestamp := p.TimeStamp + w.BaseTimeStamp()
-		w.RWBaser.RecTimeStamp(timestamp, uint32(typeID))
+		timestamp := p.TimeStamp + w.t.BaseTimeStamp()
+		w.t.RecTimeStamp(timestamp, uint32(typeID))
 
 		preDataLen := dataLen + headerLen
 		timestampExt := timestamp >> 24
