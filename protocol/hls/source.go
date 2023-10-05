@@ -130,9 +130,8 @@ func (source *Source) cut() {
 		source.flushAudio()
 
 		source.seq++
-		filename := fmt.Sprint(time.Now().Unix())
-		item := NewTSItem(filename, int(source.stat.durationMs()), source.seq, source.btswriter.Bytes())
-		source.tsCache.PushItem(item)
+		filename := fmt.Sprint(time.Now().UnixMilli())
+		source.tsCache.PushItem(NewTSItem(filename, int(source.stat.durationMs()), source.seq, source.btswriter.Bytes()))
 
 		source.btswriter.Reset()
 		source.stat.resetAndNew()
