@@ -3,6 +3,7 @@ package rtmp
 import (
 	"reflect"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/zijiren233/livelib/av"
@@ -16,8 +17,8 @@ type Writer struct {
 	packetQueue chan *av.Packet
 	WriteBWInfo StaticsBW
 
-	closed bool
-	lock   *sync.RWMutex
+	closed uint64
+	wg     sync.WaitGroup
 }
 
 func NewWriter(conn ChunkWriter) *Writer {
@@ -26,7 +27,6 @@ func NewWriter(conn ChunkWriter) *Writer {
 		t:           utils.NewTimestamp(),
 		packetQueue: make(chan *av.Packet, maxQueueNum),
 		WriteBWInfo: StaticsBW{0, 0, 0, 0, 0, 0, 0, 0},
-		lock:        new(sync.RWMutex),
 	}
 
 	return w
@@ -57,10 +57,10 @@ func (w *Writer) SaveStatics(streamid uint32, length uint64, isVideoFlag bool) {
 }
 
 func (w *Writer) Write(p *av.Packet) (err error) {
-	w.lock.RLock()
-	defer w.lock.RUnlock()
+	w.wg.Add(1)
+	defer w.wg.Done()
 
-	if w.closed {
+	if w.Closed() {
 		return av.ErrClosed
 	}
 
@@ -105,19 +105,15 @@ func (w *Writer) SendPacket() error {
 	return nil
 }
 
-func (w *Writer) Closed() bool {
-	w.lock.RLock()
-	defer w.lock.RUnlock()
-	return w.closed
-}
-
 func (w *Writer) Close() error {
-	w.lock.Lock()
-	defer w.lock.Unlock()
-	if w.closed {
-		return nil
+	if !atomic.CompareAndSwapUint64(&w.closed, 0, 1) {
+		return av.ErrClosed
 	}
-	w.closed = true
+	w.wg.Wait()
 	close(w.packetQueue)
 	return nil
+}
+
+func (w *Writer) Closed() bool {
+	return atomic.LoadUint64(&w.closed) == 1
 }

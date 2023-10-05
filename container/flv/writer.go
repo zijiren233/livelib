@@ -4,6 +4,7 @@ import (
 	"errors"
 	"io"
 	"sync"
+	"sync/atomic"
 
 	"github.com/zijiren233/livelib/av"
 	"github.com/zijiren233/livelib/protocol/amf"
@@ -28,8 +29,8 @@ type Writer struct {
 	inited    bool
 	bufSize   int
 
-	closed bool
-	lock   *sync.RWMutex
+	closed uint64
+	wg     sync.WaitGroup
 }
 
 type WriterConf func(*Writer)
@@ -45,7 +46,6 @@ func NewWriter(w io.Writer, conf ...WriterConf) *Writer {
 		t:         utils.NewTimestamp(),
 		headerBuf: make([]byte, headerLen),
 		bufSize:   1024,
-		lock:      new(sync.RWMutex),
 	}
 
 	for _, fc := range conf {
@@ -101,19 +101,14 @@ func (w *Writer) Write(p *av.Packet) error {
 		Bytes(p.Data).
 		U32(uint32(preDataLen)).Error()
 }
-
-func (w *Writer) Closed() bool {
-	w.lock.RLock()
-	defer w.lock.RUnlock()
-	return w.closed
-}
-
 func (w *Writer) Close() error {
-	w.lock.Lock()
-	defer w.lock.Unlock()
-	if w.closed {
+	if !atomic.CompareAndSwapUint64(&w.closed, 0, 1) {
 		return av.ErrClosed
 	}
-	w.closed = true
+	w.wg.Wait()
 	return nil
+}
+
+func (w *Writer) Closed() bool {
+	return atomic.LoadUint64(&w.closed) == 1
 }

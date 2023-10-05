@@ -4,6 +4,7 @@ import (
 	"errors"
 	"io"
 	"sync"
+	"sync/atomic"
 
 	"github.com/zijiren233/livelib/av"
 	"github.com/zijiren233/livelib/container/flv"
@@ -26,8 +27,8 @@ type HttpFlvWriter struct {
 
 	packetQueue chan *av.Packet
 
-	closed bool
-	lock   *sync.RWMutex
+	closed uint64
+	wg     sync.WaitGroup
 }
 
 type HttpFlvWriterConf func(*HttpFlvWriter)
@@ -44,7 +45,6 @@ func NewHttpFLVWriter(w io.Writer, conf ...HttpFlvWriterConf) *HttpFlvWriter {
 		headerBuf:   make([]byte, headerLen),
 		bufSize:     1024,
 		packetQueue: make(chan *av.Packet, maxQueueNum),
-		lock:        new(sync.RWMutex),
 	}
 
 	for _, hfwc := range conf {
@@ -57,10 +57,10 @@ func NewHttpFLVWriter(w io.Writer, conf ...HttpFlvWriterConf) *HttpFlvWriter {
 }
 
 func (w *HttpFlvWriter) Write(p *av.Packet) (err error) {
-	w.lock.RLock()
-	defer w.lock.RUnlock()
+	w.wg.Add(1)
+	defer w.wg.Done()
 
-	if w.closed {
+	if w.Closed() {
 		return av.ErrClosed
 	}
 
@@ -120,18 +120,14 @@ func (w *HttpFlvWriter) SendPacket() error {
 }
 
 func (w *HttpFlvWriter) Close() error {
-	w.lock.Lock()
-	defer w.lock.Unlock()
-	if w.closed {
+	if !atomic.CompareAndSwapUint64(&w.closed, 0, 1) {
 		return av.ErrClosed
 	}
-	w.closed = true
+	w.wg.Wait()
 	close(w.packetQueue)
 	return nil
 }
 
 func (w *HttpFlvWriter) Closed() bool {
-	w.lock.RLock()
-	defer w.lock.RUnlock()
-	return w.closed
+	return atomic.LoadUint64(&w.closed) == 1
 }

@@ -5,6 +5,7 @@ import (
 	"errors"
 	"sync"
 	"sync/atomic"
+	"unsafe"
 
 	"github.com/zijiren233/gencontainer/rwmap"
 	"github.com/zijiren233/livelib/av"
@@ -17,8 +18,9 @@ type Channel struct {
 	inPublication uint32
 	players       *rwmap.RWMap[av.WriteCloser, *packWriter]
 
-	closed bool
-	lock   *sync.RWMutex
+	closed  uint64
+	wg      sync.WaitGroup
+	hlsOnce sync.Once
 
 	hlsWriter *hls.Source
 }
@@ -26,7 +28,6 @@ type Channel struct {
 func newChannel(channelName string) *Channel {
 	return &Channel{
 		channelName: channelName,
-		lock:        &sync.RWMutex{},
 		players:     &rwmap.RWMap[av.WriteCloser, *packWriter]{},
 	}
 }
@@ -111,12 +112,12 @@ func (c *Channel) PushStart(pusher av.Reader) error {
 }
 
 func (c *Channel) Close() error {
-	c.lock.Lock()
-	defer c.lock.Unlock()
-	if c.closed {
+	if !atomic.CompareAndSwapUint64(&c.closed, 0, 1) {
 		return ErrClosed
 	}
-	c.closed = true
+
+	c.wg.Wait()
+
 	c.players.Range(func(w av.WriteCloser, player *packWriter) bool {
 		c.players.Delete(w)
 		player.GetWriter().Close()
@@ -126,23 +127,13 @@ func (c *Channel) Close() error {
 }
 
 func (c *Channel) Closed() bool {
-	c.lock.RLock()
-	defer c.lock.RUnlock()
-	return c.closed
+	return atomic.LoadUint64(&c.closed) == 1
 }
 
 func (c *Channel) AddPlayer(w av.WriteCloser) error {
-	c.lock.RLock()
-	defer c.lock.RUnlock()
-	if c.closed {
-		return ErrClosed
-	}
-	c.players.Store(w, newPackWriterCloser(w))
-	return nil
-}
-
-func (c *Channel) addPlayer(w av.WriteCloser) error {
-	if c.closed {
+	c.wg.Add(1)
+	defer c.wg.Done()
+	if c.Closed() {
 		return ErrClosed
 	}
 	c.players.Store(w, newPackWriterCloser(w))
@@ -150,9 +141,9 @@ func (c *Channel) addPlayer(w av.WriteCloser) error {
 }
 
 func (c *Channel) DelPlayer(w av.WriteCloser) error {
-	c.lock.RLock()
-	defer c.lock.RUnlock()
-	if c.closed {
+	c.wg.Add(1)
+	defer c.wg.Done()
+	if c.Closed() {
 		return ErrClosed
 	}
 	c.players.Delete(w)
@@ -160,9 +151,9 @@ func (c *Channel) DelPlayer(w av.WriteCloser) error {
 }
 
 func (c *Channel) GetPlayers() ([]av.WriteCloser, error) {
-	c.lock.RLock()
-	defer c.lock.RUnlock()
-	if c.closed {
+	c.wg.Add(1)
+	defer c.wg.Done()
+	if c.Closed() {
 		return nil, ErrClosed
 	}
 	players := make([]av.WriteCloser, 0)
@@ -174,62 +165,42 @@ func (c *Channel) GetPlayers() ([]av.WriteCloser, error) {
 }
 
 func (c *Channel) InitHlsPlayer() error {
-	c.lock.RLock()
-	if c.closed {
-		c.lock.RUnlock()
+	c.wg.Add(1)
+	defer c.wg.Done()
+	if c.Closed() {
 		return ErrClosed
 	}
-	if !c.initdHlsPlayer() {
-		c.lock.RUnlock()
-
-		c.lock.Lock()
-		defer c.lock.Unlock()
-		if c.initdHlsPlayer() {
-			return nil
+	c.hlsOnce.Do(func() {
+		if c.InitdHlsPlayer() {
+			return
 		}
-		c.hlsWriter = hls.NewSource()
+		w := hls.NewSource()
+		atomic.StorePointer((*unsafe.Pointer)(unsafe.Pointer(&c.hlsWriter)), unsafe.Pointer(w))
 		go c.hlsWriter.SendPacket()
-		if err := c.addPlayer(c.hlsWriter); err != nil {
+		if err := c.AddPlayer(c.hlsWriter); err != nil {
 			c.hlsWriter.Close()
-			return err
+			return
 		}
-		return nil
-	}
-	c.lock.RUnlock()
+	})
 	return nil
 }
 
 func (c *Channel) InitdHlsPlayer() bool {
-	c.lock.RLock()
-	defer c.lock.RUnlock()
-	return c.initdHlsPlayer()
-}
-
-func (c *Channel) initdHlsPlayer() bool {
-	return c.hlsWriter != nil && !c.hlsWriter.Closed()
+	w := atomic.LoadPointer((*unsafe.Pointer)(unsafe.Pointer(&c.hlsWriter)))
+	return w != nil
 }
 
 var ErrHlsPlayerNotInit = errors.New("hls player not init")
 
 func (c *Channel) GenM3U8PlayList(tsBashPath string) (*bytes.Buffer, error) {
-	c.lock.RLock()
-	defer c.lock.RUnlock()
-	if c.closed {
-		return nil, ErrClosed
-	}
-	if !c.initdHlsPlayer() {
+	if !c.InitdHlsPlayer() {
 		return nil, ErrHlsPlayerNotInit
 	}
 	return c.hlsWriter.GetCacheInc().GenM3U8PlayList(tsBashPath), nil
 }
 
 func (c *Channel) GetTsFile(tsName string) ([]byte, error) {
-	c.lock.RLock()
-	defer c.lock.RUnlock()
-	if c.closed {
-		return nil, ErrClosed
-	}
-	if !c.initdHlsPlayer() {
+	if !c.InitdHlsPlayer() {
 		return nil, ErrHlsPlayerNotInit
 	}
 	t, err := c.hlsWriter.GetCacheInc().GetItem(tsName)

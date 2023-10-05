@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"fmt"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/zijiren233/livelib/av"
@@ -34,8 +35,8 @@ type Source struct {
 	tsparser    *parser.CodecParser
 	packetQueue chan *av.Packet
 
-	closed bool
-	lock   *sync.RWMutex
+	closed uint64
+	wg     sync.WaitGroup
 }
 
 func NewSource() *Source {
@@ -49,7 +50,6 @@ func NewSource() *Source {
 		tsparser:    parser.NewCodecParser(),
 		bwriter:     bytes.NewBuffer(make([]byte, 100*1024)),
 		packetQueue: make(chan *av.Packet, maxQueueNum),
-		lock:        new(sync.RWMutex),
 	}
 	return s
 }
@@ -59,10 +59,10 @@ func (source *Source) GetCacheInc() *TSCache {
 }
 
 func (source *Source) Write(p *av.Packet) (err error) {
-	source.lock.RLock()
-	defer source.lock.RUnlock()
+	source.wg.Add(1)
+	defer source.wg.Done()
 
-	if source.closed {
+	if source.Closed() {
 		return av.ErrClosed
 	}
 
@@ -109,21 +109,17 @@ func (source *Source) SendPacket() error {
 // }
 
 func (source *Source) Close() error {
-	source.lock.Lock()
-	defer source.lock.Unlock()
-	if source.closed {
+	if !atomic.CompareAndSwapUint64(&source.closed, 0, 1) {
 		return av.ErrClosed
 	}
-	source.closed = true
+	source.wg.Wait()
 	// source.cleanup()
 	close(source.packetQueue)
 	return nil
 }
 
 func (source *Source) Closed() bool {
-	source.lock.RLock()
-	defer source.lock.RUnlock()
-	return source.closed
+	return atomic.LoadUint64(&source.closed) == 1
 }
 
 func (source *Source) cut() {
