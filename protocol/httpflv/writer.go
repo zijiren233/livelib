@@ -19,7 +19,7 @@ const (
 )
 
 type HttpFlvWriter struct {
-	t         *utils.Timestamp
+	t         utils.Timestamp
 	headerBuf []byte
 	w         *stream.Writer
 	inited    bool
@@ -41,7 +41,6 @@ func WithWriterBuffer(size int) HttpFlvWriterConf {
 
 func NewHttpFLVWriter(w io.Writer, conf ...HttpFlvWriterConf) *HttpFlvWriter {
 	writer := &HttpFlvWriter{
-		t:           utils.NewTimestamp(),
 		headerBuf:   make([]byte, headerLen),
 		bufSize:     1024,
 		packetQueue: make(chan *av.Packet, maxQueueNum),
@@ -73,6 +72,7 @@ func (w *HttpFlvWriter) Write(p *av.Packet) (err error) {
 }
 
 func (w *HttpFlvWriter) SendPacket() error {
+	var typeID uint8
 	for p := range w.packetQueue {
 		if !w.inited {
 			if err := w.w.Bytes(flv.FlvFirstHeader).Error(); err != nil {
@@ -81,14 +81,12 @@ func (w *HttpFlvWriter) SendPacket() error {
 			w.inited = true
 		}
 
-		var typeID uint8
-
 		if p.IsVideo {
 			typeID = av.TAG_VIDEO
 		} else if p.IsMetadata {
 			var err error
 			typeID = av.TAG_SCRIPTDATAAMF0
-			p = p.NewPacketData()
+			p = p.Clone()
 			p.Data, err = amf.MetaDataReform(p.Data, amf.DEL)
 			if err != nil {
 				return err
@@ -99,8 +97,7 @@ func (w *HttpFlvWriter) SendPacket() error {
 			return errors.New("not allowed packet type")
 		}
 		dataLen := len(p.Data)
-		timestamp := p.TimeStamp + w.t.BaseTimeStamp()
-		w.t.RecTimeStamp(timestamp, uint32(typeID))
+		timestamp := w.t.RecTimeStamp(p.TimeStamp, uint32(typeID))
 
 		preDataLen := dataLen + headerLen
 		timestampExt := timestamp >> 24
@@ -108,7 +105,7 @@ func (w *HttpFlvWriter) SendPacket() error {
 		if err := w.w.
 			U8(typeID).
 			U24(uint32(dataLen)).
-			U24(uint32(timestamp)).
+			U24(timestamp).
 			U8(uint8(timestampExt)).
 			U24(0).
 			Bytes(p.Data).

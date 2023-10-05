@@ -3,31 +3,43 @@ package utils
 import "github.com/zijiren233/livelib/av"
 
 type Timestamp struct {
-	t                  uint32
+	videoTimestamp     uint32
+	audioTimestamp     uint32
 	lastVideoTimestamp uint32
 	lastAudioTimestamp uint32
 }
 
-func NewTimestamp() *Timestamp {
-	return new(Timestamp)
-}
-
-func (rw *Timestamp) BaseTimeStamp() uint32 {
-	return rw.t
-}
-
-func (rw *Timestamp) CalcBaseTimestamp() {
-	if rw.lastAudioTimestamp > rw.lastVideoTimestamp {
-		rw.t = rw.lastAudioTimestamp
+func (rw *Timestamp) timeStamp() uint32 {
+	if rw.audioTimestamp > rw.videoTimestamp {
+		return rw.audioTimestamp
 	} else {
-		rw.t = rw.lastVideoTimestamp
+		return rw.videoTimestamp
 	}
 }
 
-func (rw *Timestamp) RecTimeStamp(timestamp, typeID uint32) {
+func (rw *Timestamp) RecTimeStamp(timestamp, typeID uint32) uint32 {
 	if typeID == av.TAG_VIDEO {
+		if timestamp < rw.videoTimestamp {
+			if rw.lastVideoTimestamp > timestamp {
+				rw.videoTimestamp += timestamp
+			} else {
+				rw.videoTimestamp += timestamp - rw.lastVideoTimestamp
+			}
+		} else {
+			rw.videoTimestamp = timestamp
+		}
 		rw.lastVideoTimestamp = timestamp
 	} else if typeID == av.TAG_AUDIO {
+		if timestamp < rw.audioTimestamp {
+			if rw.lastAudioTimestamp > timestamp {
+				rw.audioTimestamp += timestamp
+			} else {
+				rw.audioTimestamp += timestamp - rw.lastAudioTimestamp
+			}
+		} else {
+			rw.audioTimestamp = timestamp
+		}
 		rw.lastAudioTimestamp = timestamp
 	}
+	return rw.timeStamp()
 }

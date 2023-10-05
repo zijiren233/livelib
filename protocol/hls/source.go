@@ -11,6 +11,7 @@ import (
 	"github.com/zijiren233/livelib/container/flv"
 	"github.com/zijiren233/livelib/container/ts"
 	"github.com/zijiren233/livelib/protocol/hls/parser"
+	"github.com/zijiren233/livelib/utils"
 )
 
 const (
@@ -23,6 +24,7 @@ const (
 
 type Source struct {
 	seq         int
+	t           utils.Timestamp
 	bwriter     *bytes.Buffer
 	btswriter   *bytes.Buffer
 	demuxer     *flv.Demuxer
@@ -79,7 +81,7 @@ func (source *Source) SendPacket() error {
 		if p.IsMetadata {
 			continue
 		}
-		p = p.NewPacketData()
+		p = p.Clone()
 		err := source.demuxer.Demux(p)
 		if err != nil {
 			if err == flv.ErrAvcEndSEQ {
@@ -92,6 +94,7 @@ func (source *Source) SendPacket() error {
 		if err != nil || isSeq {
 			continue
 		}
+		p.TimeStamp = source.t.RecTimeStamp(p.TimeStamp, uint32(p.Type()))
 		if source.btswriter != nil {
 			source.stat.update(p.IsVideo, p.TimeStamp)
 			source.calcPtsDts(p.IsVideo, p.TimeStamp, uint32(compositionTime))

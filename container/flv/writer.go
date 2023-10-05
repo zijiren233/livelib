@@ -23,7 +23,7 @@ const (
 )
 
 type Writer struct {
-	t         *utils.Timestamp
+	t         utils.Timestamp
 	headerBuf []byte
 	w         *stream.Writer
 	inited    bool
@@ -43,7 +43,6 @@ func WithWriterBuffer(size int) WriterConf {
 
 func NewWriter(w io.Writer, conf ...WriterConf) *Writer {
 	writer := &Writer{
-		t:         utils.NewTimestamp(),
 		headerBuf: make([]byte, headerLen),
 		bufSize:   1024,
 	}
@@ -75,7 +74,7 @@ func (w *Writer) Write(p *av.Packet) error {
 	} else if p.IsMetadata {
 		var err error
 		typeID = av.TAG_SCRIPTDATAAMF0
-		p = p.NewPacketData()
+		p = p.Clone()
 		p.Data, err = amf.MetaDataReform(p.Data, amf.DEL)
 		if err != nil {
 			return err
@@ -86,8 +85,7 @@ func (w *Writer) Write(p *av.Packet) error {
 		return nil
 	}
 	dataLen := len(p.Data)
-	timestamp := p.TimeStamp + w.t.BaseTimeStamp()
-	w.t.RecTimeStamp(timestamp, uint32(typeID))
+	timestamp := w.t.RecTimeStamp(p.TimeStamp, uint32(typeID))
 
 	preDataLen := dataLen + headerLen
 	timestampExt := timestamp >> 24
@@ -95,7 +93,7 @@ func (w *Writer) Write(p *av.Packet) error {
 	return w.w.
 		U8(typeID).
 		U24(uint32(dataLen)).
-		U24(uint32(timestamp)).
+		U24(timestamp).
 		U8(uint8(timestampExt)).
 		U24(0).
 		Bytes(p.Data).

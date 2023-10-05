@@ -12,7 +12,7 @@ import (
 )
 
 type Writer struct {
-	t           *utils.Timestamp
+	t           utils.Timestamp
 	conn        ChunkWriter
 	packetQueue chan *av.Packet
 	WriteBWInfo StaticsBW
@@ -24,7 +24,6 @@ type Writer struct {
 func NewWriter(conn ChunkWriter) *Writer {
 	w := &Writer{
 		conn:        conn,
-		t:           utils.NewTimestamp(),
 		packetQueue: make(chan *av.Packet, maxQueueNum),
 		WriteBWInfo: StaticsBW{0, 0, 0, 0, 0, 0, 0, 0},
 	}
@@ -79,21 +78,11 @@ func (w *Writer) SendPacket() error {
 		cs.Data = p.Data
 		cs.Length = uint32(len(p.Data))
 		cs.StreamID = p.StreamID
-		cs.Timestamp = p.TimeStamp
-		cs.Timestamp += w.t.BaseTimeStamp()
 
-		if p.IsVideo {
-			cs.TypeID = av.TAG_VIDEO
-		} else {
-			if p.IsMetadata {
-				cs.TypeID = av.TAG_SCRIPTDATAAMF0
-			} else {
-				cs.TypeID = av.TAG_AUDIO
-			}
-		}
+		cs.TypeID = uint32(p.Type())
 
 		w.SaveStatics(p.StreamID, uint64(cs.Length), p.IsVideo)
-		w.t.RecTimeStamp(cs.Timestamp, cs.TypeID)
+		cs.Timestamp = w.t.RecTimeStamp(p.TimeStamp, cs.TypeID)
 		if err := w.conn.Write(cs); err != nil {
 			return err
 		}

@@ -15,7 +15,17 @@ type Packet struct {
 	Data       []byte
 }
 
-func (p *Packet) NewPacketData() *Packet {
+func (p *Packet) Type() int {
+	if p.IsVideo {
+		return TAG_VIDEO
+	} else if p.IsMetadata {
+		return TAG_SCRIPTDATAAMF0
+	} else {
+		return TAG_AUDIO
+	}
+}
+
+func (p *Packet) Clone() *Packet {
 	var tp = *p
 	tp.Data = make([]byte, len(p.Data))
 	copy(tp.Data, p.Data)
