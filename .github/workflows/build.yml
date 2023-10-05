@@ -35,4 +35,4 @@ jobs:
                   title: Development
                   prerelease: true
                   files: |
-                    build/github.com/zijiren233/livelib/*
+                    build/github.com/zijiren233/*
