@@ -63,6 +63,9 @@ func (w *Writer) Write(p *av.Packet) (err error) {
 		return av.ErrClosed
 	}
 
+	p = p.Clone()
+	p.TimeStamp = w.t.RecTimeStamp(p.TimeStamp)
+
 	select {
 	case w.packetQueue <- p:
 	default:
@@ -82,7 +85,7 @@ func (w *Writer) SendPacket() error {
 		cs.TypeID = uint32(p.Type())
 
 		w.SaveStatics(p.StreamID, uint64(cs.Length), p.IsVideo)
-		cs.Timestamp = w.t.RecTimeStamp(p.TimeStamp, cs.TypeID)
+		cs.Timestamp = p.TimeStamp
 		if err := w.conn.Write(cs); err != nil {
 			return err
 		}

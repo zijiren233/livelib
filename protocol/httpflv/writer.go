@@ -62,7 +62,8 @@ func (w *HttpFlvWriter) Write(p *av.Packet) (err error) {
 	if w.Closed() {
 		return av.ErrClosed
 	}
-
+	p = p.Clone()
+	p.TimeStamp = w.t.RecTimeStamp(p.TimeStamp)
 	select {
 	case w.packetQueue <- p:
 	default:
@@ -86,7 +87,7 @@ func (w *HttpFlvWriter) SendPacket() error {
 		} else if p.IsMetadata {
 			var err error
 			typeID = av.TAG_SCRIPTDATAAMF0
-			p = p.Clone()
+			p = p.DeepClone()
 			p.Data, err = amf.MetaDataReform(p.Data, amf.DEL)
 			if err != nil {
 				return err
@@ -97,15 +98,13 @@ func (w *HttpFlvWriter) SendPacket() error {
 			return errors.New("not allowed packet type")
 		}
 		dataLen := len(p.Data)
-		timestamp := w.t.RecTimeStamp(p.TimeStamp, uint32(typeID))
-
 		preDataLen := dataLen + headerLen
-		timestampExt := timestamp >> 24
+		timestampExt := p.TimeStamp >> 24
 
 		if err := w.w.
 			U8(typeID).
 			U24(uint32(dataLen)).
-			U24(timestamp).
+			U24(p.TimeStamp).
 			U8(uint8(timestampExt)).
 			U24(0).
 			Bytes(p.Data).

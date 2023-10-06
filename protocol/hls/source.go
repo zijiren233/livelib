@@ -68,6 +68,9 @@ func (source *Source) Write(p *av.Packet) (err error) {
 		return av.ErrClosed
 	}
 
+	p = p.Clone()
+	p.TimeStamp = source.t.RecTimeStamp(p.TimeStamp)
+
 	select {
 	case source.packetQueue <- p:
 	default:
@@ -81,7 +84,7 @@ func (source *Source) SendPacket() error {
 		if p.IsMetadata {
 			continue
 		}
-		p = p.Clone()
+		p = p.DeepClone()
 		err := source.demuxer.Demux(p)
 		if err != nil {
 			if err == flv.ErrAvcEndSEQ {
@@ -94,7 +97,6 @@ func (source *Source) SendPacket() error {
 		if err != nil || isSeq {
 			continue
 		}
-		p.TimeStamp = source.t.RecTimeStamp(p.TimeStamp, uint32(p.Type()))
 		if source.btswriter != nil {
 			source.stat.update(p.IsVideo, p.TimeStamp)
 			source.calcPtsDts(p.IsVideo, p.TimeStamp, uint32(compositionTime))
