@@ -12,7 +12,6 @@ func NewTSItem(tsName string, duration, seqNum int64, b []byte) *TSItem {
 	item.TsName = tsName
 	item.SeqNum = seqNum
 	item.Duration = duration
-	item.Data = make([]byte, len(b))
-	copy(item.Data, b)
+	item.Data = b
 	return item
 }

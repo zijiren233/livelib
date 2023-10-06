@@ -44,6 +44,7 @@ type Source struct {
 func NewSource() *Source {
 	s := &Source{
 		align:       new(align),
+		btswriter:   bytes.NewBuffer(nil),
 		stat:        newStatus(),
 		cache:       newAudioCache(),
 		demuxer:     flv.NewDemuxer(),
@@ -97,11 +98,9 @@ func (source *Source) SendPacket() error {
 		if err != nil || isSeq {
 			continue
 		}
-		if source.btswriter != nil {
-			source.stat.update(p.IsVideo, p.TimeStamp)
-			source.calcPtsDts(p.IsVideo, p.TimeStamp, uint32(compositionTime))
-			source.tsMux(p)
-		}
+		source.stat.update(p.IsVideo, p.TimeStamp)
+		source.calcPtsDts(p.IsVideo, p.TimeStamp, uint32(compositionTime))
+		source.tsMux(p)
 	}
 	return nil
 }
@@ -129,9 +128,7 @@ func (source *Source) Closed() bool {
 
 func (source *Source) cut() {
 	newf := true
-	if source.btswriter == nil {
-		source.btswriter = bytes.NewBuffer(nil)
-	} else if source.stat.durationMs() >= duration {
+	if source.stat.durationMs() >= duration {
 		source.flushAudio()
 
 		source.seq++
