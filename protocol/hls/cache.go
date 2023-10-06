@@ -29,25 +29,30 @@ func NewTSCacheItem() *TSCache {
 	}
 }
 
-func (tc *TSCache) GenM3U8PlayList(tsBasePath string) *bytes.Buffer {
-	var seq int
-	var getSeq bool
-	var maxDuration int
-	m3u8body := bytes.NewBuffer(nil)
+func (tc *TSCache) all() []*TSItem {
 	tc.lock.RLock()
 	defer tc.lock.RUnlock()
+	var items []*TSItem = make([]*TSItem, 0, tc.l.Len())
 	for e := tc.l.Front(); e != nil; e = e.Next() {
-		item := e.Value
+		items = append(items, e.Value)
+	}
+	return items
+}
+
+func (tc *TSCache) GenM3U8PlayList(tsBasePath string) *bytes.Buffer {
+	var seq int64
+	var maxDuration int64
+	m3u8body := bytes.NewBuffer(nil)
+	for _, item := range tc.all() {
 		if item.Duration > maxDuration {
 			maxDuration = item.Duration
 		}
-		if !getSeq {
-			getSeq = true
+		if seq == 0 {
 			seq = item.SeqNum
 		}
-		fmt.Fprintf(m3u8body, "#EXTINF:%.3f,\n%s.ts\n", float64(item.Duration)/float64(1000), path.Join(tsBasePath, item.TsName))
+		fmt.Fprintf(m3u8body, "#EXTINF:%.3f,\n%s.ts\n#EXT-X-BYTERANGE:%d\n", float64(item.Duration)/float64(1000), path.Join(tsBasePath, item.TsName), len(item.Data))
 	}
-	w := bytes.NewBuffer(nil)
+	w := bytes.NewBuffer(make([]byte, 0, m3u8body.Len()+256))
 	fmt.Fprintf(w,
 		"#EXTM3U\n#EXT-X-VERSION:3\n#EXT-X-ALLOW-CACHE:NO\n#EXT-X-TARGETDURATION:%d\n#EXT-X-MEDIA-SEQUENCE:%d\n\n",
 		maxDuration/1000+1, seq)
@@ -71,9 +76,8 @@ func (tc *TSCache) GetItem(tsName string) (*TSItem, error) {
 	tc.lock.RLock()
 	defer tc.lock.RUnlock()
 	for e := tc.l.Front(); e != nil; e = e.Next() {
-		item := e.Value
-		if item.TsName == tsName {
-			return item, nil
+		if e.Value.TsName == tsName {
+			return e.Value, nil
 		}
 	}
 	return nil, fs.ErrNotExist

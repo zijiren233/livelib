@@ -23,7 +23,7 @@ const (
 )
 
 type Source struct {
-	seq         int
+	seq         int64
 	t           utils.Timestamp
 	bwriter     *bytes.Buffer
 	btswriter   *bytes.Buffer
@@ -43,7 +43,7 @@ type Source struct {
 
 func NewSource() *Source {
 	s := &Source{
-		align:       &align{},
+		align:       new(align),
 		stat:        newStatus(),
 		cache:       newAudioCache(),
 		demuxer:     flv.NewDemuxer(),
@@ -136,7 +136,7 @@ func (source *Source) cut() {
 
 		source.seq++
 		filename := fmt.Sprint(time.Now().UnixMilli())
-		source.tsCache.PushItem(NewTSItem(filename, int(source.stat.durationMs()), source.seq, source.btswriter.Bytes()))
+		source.tsCache.PushItem(NewTSItem(filename, source.stat.durationMs(), source.seq, source.btswriter.Bytes()))
 
 		source.btswriter.Reset()
 		source.stat.resetAndNew()
