@@ -18,7 +18,7 @@ type Channel struct {
 	inPublication uint32
 	players       *rwmap.RWMap[av.WriteCloser, *packWriter]
 
-	closed  uint64
+	closed  uint32
 	wg      sync.WaitGroup
 	hlsOnce sync.Once
 
@@ -112,7 +112,7 @@ func (c *Channel) PushStart(pusher av.Reader) error {
 }
 
 func (c *Channel) Close() error {
-	if !atomic.CompareAndSwapUint64(&c.closed, 0, 1) {
+	if !atomic.CompareAndSwapUint32(&c.closed, 0, 1) {
 		return ErrClosed
 	}
 
@@ -127,7 +127,7 @@ func (c *Channel) Close() error {
 }
 
 func (c *Channel) Closed() bool {
-	return atomic.LoadUint64(&c.closed) == 1
+	return atomic.LoadUint32(&c.closed) == 1
 }
 
 func (c *Channel) AddPlayer(w av.WriteCloser) error {

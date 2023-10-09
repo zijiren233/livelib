@@ -37,7 +37,7 @@ type Source struct {
 	tsparser    *parser.CodecParser
 	packetQueue chan *av.Packet
 
-	closed uint64
+	closed uint32
 	wg     sync.WaitGroup
 }
 
@@ -113,7 +113,7 @@ func (source *Source) SendPacket() error {
 // }
 
 func (source *Source) Close() error {
-	if !atomic.CompareAndSwapUint64(&source.closed, 0, 1) {
+	if !atomic.CompareAndSwapUint32(&source.closed, 0, 1) {
 		return av.ErrClosed
 	}
 	source.wg.Wait()
@@ -123,7 +123,7 @@ func (source *Source) Close() error {
 }
 
 func (source *Source) Closed() bool {
-	return atomic.LoadUint64(&source.closed) == 1
+	return atomic.LoadUint32(&source.closed) == 1
 }
 
 func (source *Source) cut() {

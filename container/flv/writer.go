@@ -29,7 +29,7 @@ type Writer struct {
 	inited    bool
 	bufSize   int
 
-	closed uint64
+	closed uint32
 	wg     sync.WaitGroup
 }
 
@@ -100,7 +100,7 @@ func (w *Writer) Write(p *av.Packet) error {
 		U32(uint32(preDataLen)).Error()
 }
 func (w *Writer) Close() error {
-	if !atomic.CompareAndSwapUint64(&w.closed, 0, 1) {
+	if !atomic.CompareAndSwapUint32(&w.closed, 0, 1) {
 		return av.ErrClosed
 	}
 	w.wg.Wait()
@@ -108,5 +108,5 @@ func (w *Writer) Close() error {
 }
 
 func (w *Writer) Closed() bool {
-	return atomic.LoadUint64(&w.closed) == 1
+	return atomic.LoadUint32(&w.closed) == 1
 }

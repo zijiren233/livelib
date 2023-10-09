@@ -27,7 +27,7 @@ type HttpFlvWriter struct {
 
 	packetQueue chan *av.Packet
 
-	closed uint64
+	closed uint32
 	wg     sync.WaitGroup
 }
 
@@ -116,7 +116,7 @@ func (w *HttpFlvWriter) SendPacket() error {
 }
 
 func (w *HttpFlvWriter) Close() error {
-	if !atomic.CompareAndSwapUint64(&w.closed, 0, 1) {
+	if !atomic.CompareAndSwapUint32(&w.closed, 0, 1) {
 		return av.ErrClosed
 	}
 	w.wg.Wait()
@@ -125,5 +125,5 @@ func (w *HttpFlvWriter) Close() error {
 }
 
 func (w *HttpFlvWriter) Closed() bool {
-	return atomic.LoadUint64(&w.closed) == 1
+	return atomic.LoadUint32(&w.closed) == 1
 }

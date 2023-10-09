@@ -9,14 +9,13 @@ import (
 
 type App struct {
 	appName  string
-	channels *rwmap.RWMap[string, *Channel]
+	channels rwmap.RWMap[string, *Channel]
 	closed   uint32
 }
 
 func NewApp(appName string) *App {
 	return &App{
-		appName:  appName,
-		channels: &rwmap.RWMap[string, *Channel]{},
+		appName: appName,
 	}
 }
 

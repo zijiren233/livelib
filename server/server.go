@@ -11,7 +11,7 @@ import (
 )
 
 type Server struct {
-	apps                   *rwmap.RWMap[string, *App]
+	apps                   rwmap.RWMap[string, *App]
 	connBufferSize         int32
 	parseChannelFunc       parseChannelFunc
 	initHlsPlayer          bool
@@ -22,7 +22,6 @@ type parseChannelFunc func(ReqAppName, ReqChannelName string, IsPublisher bool) 
 
 func DefaultRtmpServer() *Server {
 	return &Server{
-		apps:                   &rwmap.RWMap[string, *App]{},
 		connBufferSize:         4096,
 		initHlsPlayer:          false,
 		autoCreateAppOrChannel: false,
