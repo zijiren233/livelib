@@ -12,7 +12,7 @@ import (
 )
 
 const (
-	maxTSCacheNum = 3
+	maxTSCacheNum = 5
 )
 
 type TSCache struct {
@@ -42,7 +42,11 @@ func (tc *TSCache) GenM3U8PlayList(tsBasePath string) *bytes.Buffer {
 	var seq int64
 	var maxDuration int64
 	m3u8body := bytes.NewBuffer(nil)
-	for _, item := range tc.all() {
+	all := tc.all()
+	if l := len(all); l > 3 {
+		all = all[l-3:]
+	}
+	for _, item := range all {
 		if item.Duration > maxDuration {
 			maxDuration = item.Duration
 		}

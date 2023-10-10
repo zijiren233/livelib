@@ -31,7 +31,7 @@ type Source struct {
 	muxer       *ts.Muxer
 	pts, dts    uint64
 	stat        *status
-	align       *align
+	align       align
 	cache       *audioCache
 	tsCache     *TSCache
 	tsparser    *parser.CodecParser
@@ -43,8 +43,6 @@ type Source struct {
 
 func NewSource() *Source {
 	s := &Source{
-		align:       new(align),
-		btswriter:   bytes.NewBuffer(nil),
 		stat:        newStatus(),
 		cache:       newAudioCache(),
 		demuxer:     flv.NewDemuxer(),
@@ -98,9 +96,11 @@ func (source *Source) SendPacket() error {
 		if err != nil || isSeq {
 			continue
 		}
-		source.stat.update(p.IsVideo, p.TimeStamp)
-		source.calcPtsDts(p.IsVideo, p.TimeStamp, uint32(compositionTime))
-		source.tsMux(p)
+		if source.btswriter != nil {
+			source.stat.update(p.IsVideo, p.TimeStamp)
+			source.calcPtsDts(p.IsVideo, p.TimeStamp, uint32(compositionTime))
+			source.tsMux(p)
+		}
 	}
 	return nil
 }
@@ -128,12 +128,13 @@ func (source *Source) Closed() bool {
 
 func (source *Source) cut() {
 	newf := true
-	if source.stat.durationMs() >= duration {
+	if source.btswriter == nil {
+		source.btswriter = bytes.NewBuffer(nil)
+	} else if source.stat.durationMs() >= duration {
 		source.flushAudio()
 
 		source.seq++
-		filename := fmt.Sprint(time.Now().UnixMilli())
-		source.tsCache.PushItem(NewTSItem(filename, source.stat.durationMs(), source.seq, source.btswriter.Bytes()))
+		source.tsCache.PushItem(NewTSItem(fmt.Sprint(time.Now().UnixMilli()), source.stat.durationMs(), source.seq, source.btswriter.Bytes()))
 
 		source.btswriter.Reset()
 		source.stat.resetAndNew()
