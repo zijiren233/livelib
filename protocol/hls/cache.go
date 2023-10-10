@@ -18,14 +18,13 @@ const (
 type TSCache struct {
 	max  int
 	l    *dllist.Dllist[*TSItem]
-	lock *sync.RWMutex
+	lock sync.RWMutex
 }
 
 func NewTSCacheItem() *TSCache {
 	return &TSCache{
-		l:    dllist.New[*TSItem](),
-		max:  maxTSCacheNum,
-		lock: new(sync.RWMutex),
+		l:   dllist.New[*TSItem](),
+		max: maxTSCacheNum,
 	}
 }
 
