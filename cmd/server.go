@@ -38,7 +38,7 @@ func Server(cmd *cobra.Command, args []string) {
 	tcp := muxer.Match(cmux.Any())
 	channels := rwmap.RWMap[string, *server.Channel]{}
 	s := server.NewRtmpServer(func(ReqAppName, ReqChannelName string, IsPublisher bool) (*server.Channel, error) {
-		c, _ := channels.LoadOrStore(ReqAppName, server.NewChannel(ReqAppName))
+		c, _ := channels.LoadOrStore(ReqAppName, server.NewChannel())
 		c.InitHlsPlayer()
 		return c, nil
 	})

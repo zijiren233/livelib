@@ -14,7 +14,6 @@ import (
 )
 
 type Channel struct {
-	channelName   string
 	inPublication uint32
 	players       rwmap.RWMap[av.WriteCloser, *packWriter]
 
@@ -27,10 +26,8 @@ type Channel struct {
 
 type ChannelConf func(*Channel)
 
-func NewChannel(channelName string, conf ...ChannelConf) *Channel {
-	ch := &Channel{
-		channelName: channelName,
-	}
+func NewChannel(conf ...ChannelConf) *Channel {
+	ch := &Channel{}
 	for _, c := range conf {
 		c(ch)
 	}
