@@ -16,7 +16,7 @@ import (
 type Channel struct {
 	channelName   string
 	inPublication uint32
-	players       *rwmap.RWMap[av.WriteCloser, *packWriter]
+	players       rwmap.RWMap[av.WriteCloser, *packWriter]
 
 	closed  uint32
 	wg      sync.WaitGroup
@@ -25,11 +25,16 @@ type Channel struct {
 	hlsWriter *hls.Source
 }
 
-func newChannel(channelName string) *Channel {
-	return &Channel{
+type ChannelConf func(*Channel)
+
+func NewChannel(channelName string, conf ...ChannelConf) *Channel {
+	ch := &Channel{
 		channelName: channelName,
-		players:     &rwmap.RWMap[av.WriteCloser, *packWriter]{},
 	}
+	for _, c := range conf {
+		c(ch)
+	}
+	return ch
 }
 
 func (c *Channel) InPublication() bool {

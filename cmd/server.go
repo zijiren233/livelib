@@ -11,6 +11,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/soheilhy/cmux"
 	"github.com/spf13/cobra"
+	"github.com/zijiren233/gencontainer/rwmap"
 	"github.com/zijiren233/livelib/cmd/flags"
 	"github.com/zijiren233/livelib/protocol/hls"
 	"github.com/zijiren233/livelib/protocol/httpflv"
@@ -35,7 +36,12 @@ func Server(cmd *cobra.Command, args []string) {
 	muxer := cmux.New(listener)
 	httpl := muxer.Match(cmux.HTTP1Fast())
 	tcp := muxer.Match(cmux.Any())
-	s := server.NewRtmpServer(server.WithInitHlsPlayer(true), server.WithAutoCreateAppOrChannel(true))
+	channels := rwmap.RWMap[string, *server.Channel]{}
+	s := server.NewRtmpServer(func(ReqAppName, ReqChannelName string, IsPublisher bool) (*server.Channel, error) {
+		c, _ := channels.LoadOrStore(ReqAppName, server.NewChannel(ReqAppName))
+		c.InitHlsPlayer()
+		return c, nil
+	})
 	go s.Serve(tcp)
 	if flags.Dev {
 		gin.SetMode(gin.DebugMode)
@@ -51,10 +57,11 @@ func Server(cmd *cobra.Command, args []string) {
 		fileName := channelSplitd[0]
 		fileExt := path.Ext(channelStr)
 		channelName := strings.TrimSuffix(fileName, fileExt)
-		channel, err := s.GetChannelWithApp(appName, channelName)
-		if err != nil {
+
+		channel, ok := channels.Load(appName)
+		if !ok {
 			c.AbortWithStatusJSON(http.StatusNotFound, gin.H{
-				"error": err.Error(),
+				"error": "app not found",
 			})
 			return
 		}
