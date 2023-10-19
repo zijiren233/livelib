@@ -71,7 +71,11 @@ func (s *Server) handleConn(conn *core.Conn) (err error) {
 	if s.authFunc == nil {
 		panic("rtmp server auth func not implemented")
 	}
+
 	channel, err := s.authFunc(app, name, connServer.IsPublisher())
+	if err != nil {
+		return err
+	}
 
 	if connServer.IsPublisher() {
 		reader := rtmp.NewReader(connServer)
