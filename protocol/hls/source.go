@@ -117,7 +117,6 @@ func (source *Source) Close() error {
 		return av.ErrClosed
 	}
 	source.wg.Wait()
-	// source.cleanup()
 	close(source.packetQueue)
 	return nil
 }

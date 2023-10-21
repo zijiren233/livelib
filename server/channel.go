@@ -138,7 +138,10 @@ func (c *Channel) AddPlayer(w av.WriteCloser) error {
 	if c.Closed() {
 		return ErrClosed
 	}
-	c.players.Store(w, newPackWriterCloser(w))
+	_, loaded := c.players.LoadOrStore(w, newPackWriterCloser(w))
+	if loaded {
+		return errors.New("player already exists")
+	}
 	return nil
 }
 
@@ -148,7 +151,10 @@ func (c *Channel) DelPlayer(w av.WriteCloser) error {
 	if c.Closed() {
 		return ErrClosed
 	}
-	c.players.Delete(w)
+	pw, loaded := c.players.LoadAndDelete(w)
+	if loaded {
+		pw.GetWriter().Close()
+	}
 	return nil
 }
 
@@ -173,18 +179,36 @@ func (c *Channel) InitHlsPlayer() error {
 		return ErrClosed
 	}
 	c.hlsOnce.Do(func() {
-		if c.InitdHlsPlayer() {
-			return
-		}
-		w := hls.NewSource()
-		atomic.StorePointer((*unsafe.Pointer)(unsafe.Pointer(&c.hlsWriter)), unsafe.Pointer(w))
-		go c.hlsWriter.SendPacket()
-		if err := c.AddPlayer(c.hlsWriter); err != nil {
-			c.hlsWriter.Close()
-			return
-		}
+		p := hls.NewSource()
+		atomic.StorePointer((*unsafe.Pointer)(unsafe.Pointer(&c.hlsWriter)), unsafe.Pointer(p))
+		go func() {
+			for {
+				if c.Closed() {
+					return
+				}
+				if err := c.AddPlayer(p); err != nil {
+					p.Close()
+					continue
+				}
+				p.SendPacket()
+				p.Close()
+				if c.Closed() {
+					return
+				}
+				p = hls.NewSource()
+				atomic.StorePointer((*unsafe.Pointer)(unsafe.Pointer(&c.hlsWriter)), unsafe.Pointer(p))
+			}
+		}()
 	})
 	return nil
+}
+
+func (c *Channel) HlsPlayer() *hls.Source {
+	w := atomic.LoadPointer((*unsafe.Pointer)(unsafe.Pointer(&c.hlsWriter)))
+	if w == nil {
+		return nil
+	}
+	return (*hls.Source)(w)
 }
 
 func (c *Channel) InitdHlsPlayer() bool {
@@ -198,14 +222,14 @@ func (c *Channel) GenM3U8PlayList(tsBashPath string) (*bytes.Buffer, error) {
 	if !c.InitdHlsPlayer() {
 		return nil, ErrHlsPlayerNotInit
 	}
-	return c.hlsWriter.GetCacheInc().GenM3U8PlayList(tsBashPath), nil
+	return c.HlsPlayer().GetCacheInc().GenM3U8PlayList(tsBashPath), nil
 }
 
 func (c *Channel) GetTsFile(tsName string) ([]byte, error) {
 	if !c.InitdHlsPlayer() {
 		return nil, ErrHlsPlayerNotInit
 	}
-	t, err := c.hlsWriter.GetCacheInc().GetItem(tsName)
+	t, err := c.HlsPlayer().GetCacheInc().GetItem(tsName)
 	if err != nil {
 		return nil, err
 	}
