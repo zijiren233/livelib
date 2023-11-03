@@ -4,7 +4,6 @@ import (
 	"errors"
 	"sync"
 	"sync/atomic"
-	"unsafe"
 
 	"github.com/zijiren233/gencontainer/rwmap"
 	"github.com/zijiren233/livelib/av"
@@ -20,7 +19,7 @@ type Channel struct {
 	wg      sync.WaitGroup
 	hlsOnce sync.Once
 
-	hlsWriter *hls.Source
+	hlsWriter atomic.Pointer[hls.Source]
 }
 
 type ChannelConf func(*Channel)
@@ -179,7 +178,7 @@ func (c *Channel) InitHlsPlayer() error {
 	}
 	c.hlsOnce.Do(func() {
 		p := hls.NewSource()
-		atomic.StorePointer((*unsafe.Pointer)(unsafe.Pointer(&c.hlsWriter)), unsafe.Pointer(p))
+		c.hlsWriter.Store(p)
 		go func() {
 			for {
 				if c.Closed() {
@@ -195,7 +194,7 @@ func (c *Channel) InitHlsPlayer() error {
 					return
 				}
 				p = hls.NewSource()
-				atomic.StorePointer((*unsafe.Pointer)(unsafe.Pointer(&c.hlsWriter)), unsafe.Pointer(p))
+				c.hlsWriter.Store(p)
 			}
 		}()
 	})
@@ -203,16 +202,11 @@ func (c *Channel) InitHlsPlayer() error {
 }
 
 func (c *Channel) HlsPlayer() *hls.Source {
-	w := atomic.LoadPointer((*unsafe.Pointer)(unsafe.Pointer(&c.hlsWriter)))
-	if w == nil {
-		return nil
-	}
-	return (*hls.Source)(w)
+	return c.hlsWriter.Load()
 }
 
 func (c *Channel) InitdHlsPlayer() bool {
-	w := atomic.LoadPointer((*unsafe.Pointer)(unsafe.Pointer(&c.hlsWriter)))
-	return w != nil
+	return c.hlsWriter.Load() != nil
 }
 
 var ErrHlsPlayerNotInit = errors.New("hls player not init")
