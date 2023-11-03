@@ -1,7 +1,6 @@
 package server
 
 import (
-	"bytes"
 	"errors"
 	"sync"
 	"sync/atomic"
@@ -218,11 +217,11 @@ func (c *Channel) InitdHlsPlayer() bool {
 
 var ErrHlsPlayerNotInit = errors.New("hls player not init")
 
-func (c *Channel) GenM3U8PlayList(tsBashPath string) (*bytes.Buffer, error) {
+func (c *Channel) GenM3U8File(tsPath func(tsName string) (tsPath string)) ([]byte, error) {
 	if !c.InitdHlsPlayer() {
 		return nil, ErrHlsPlayerNotInit
 	}
-	return c.HlsPlayer().GetCacheInc().GenM3U8PlayList(tsBashPath), nil
+	return c.HlsPlayer().GetCacheInc().GenM3U8File(tsPath), nil
 }
 
 func (c *Channel) GetTsFile(tsName string) ([]byte, error) {

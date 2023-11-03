@@ -1,8 +1,13 @@
 package cmd
 
 import (
+	"bytes"
 	"fmt"
+	"image"
+	"image/color"
+	"image/png"
 	"log"
+	"math/rand"
 	"net"
 	"net/http"
 	"path"
@@ -50,9 +55,9 @@ func Server(cmd *cobra.Command, args []string) {
 	}
 	e := gin.Default()
 	utils.Cors(e)
-	e.GET("/:app/*channel", func(c *gin.Context) {
-		appName := c.Param("app")
-		channelStr := strings.Trim(c.Param("channel"), "/")
+	e.GET("/:app/*channel", func(ctx *gin.Context) {
+		appName := ctx.Param("app")
+		channelStr := strings.Trim(ctx.Param("channel"), "/")
 		channelSplitd := strings.Split(channelStr, "/")
 		fileName := channelSplitd[0]
 		fileExt := path.Ext(channelStr)
@@ -60,35 +65,54 @@ func Server(cmd *cobra.Command, args []string) {
 
 		channel, ok := channels.Load(appName)
 		if !ok {
-			c.AbortWithStatusJSON(http.StatusNotFound, gin.H{
+			ctx.AbortWithStatusJSON(http.StatusNotFound, gin.H{
 				"error": "app not found",
 			})
 			return
 		}
 		switch fileExt {
 		case ".flv":
-			w := httpflv.NewHttpFLVWriter(c.Writer)
+			w := httpflv.NewHttpFLVWriter(ctx.Writer)
 			defer w.Close()
 			channel.AddPlayer(w)
 			w.SendPacket()
 		case ".m3u8":
-			b, err := channel.GenM3U8PlayList(fmt.Sprintf("/%s/%s", appName, channelName))
+			b, err := channel.GenM3U8File(func(tsName string) (tsPath string) {
+				return fmt.Sprintf("/%s/%s/%s.%s", appName, channelName, tsName, ctx.DefaultQuery("t", "ts"))
+			})
 			if err != nil {
-				c.AbortWithStatusJSON(http.StatusNotFound, gin.H{
+				ctx.AbortWithStatusJSON(http.StatusNotFound, gin.H{
 					"error": err.Error(),
 				})
 				return
 			}
-			c.Data(http.StatusOK, hls.M3U8ContentType, b.Bytes())
+			ctx.Data(http.StatusOK, hls.M3U8ContentType, b)
 		case ".ts":
 			b, err := channel.GetTsFile(channelSplitd[1])
 			if err != nil {
-				c.AbortWithStatusJSON(http.StatusNotFound, gin.H{
+				ctx.AbortWithStatusJSON(http.StatusNotFound, gin.H{
 					"error": err.Error(),
 				})
 				return
 			}
-			c.Data(http.StatusOK, hls.TSContentType, b)
+			ctx.Data(http.StatusOK, hls.TSContentType, b)
+		case ".png":
+			b, err := channel.GetTsFile(strings.TrimRight(channelSplitd[1], ".png"))
+			if err != nil {
+				ctx.AbortWithStatusJSON(http.StatusNotFound, gin.H{
+					"error": err.Error(),
+				})
+				return
+			}
+			img := image.NewGray(image.Rect(0, 0, 1, 1))
+			img.Set(1, 1, color.Gray{uint8(rand.Intn(255))})
+			f := bytes.NewBuffer(nil)
+			err = png.Encode(f, img)
+			if err != nil {
+				panic(err)
+			}
+			ctx.Data(http.StatusOK, "image/png", f.Bytes())
+			ctx.Writer.Write(b)
 		}
 	})
 	go http.Serve(httpl, e.Handler())

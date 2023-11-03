@@ -4,7 +4,7 @@ import (
 	"bytes"
 	"fmt"
 	"io/fs"
-	"path"
+	"path/filepath"
 	"strings"
 	"sync"
 
@@ -38,7 +38,7 @@ func (tc *TSCache) all() []*TSItem {
 	return items
 }
 
-func (tc *TSCache) GenM3U8PlayList(tsBasePath string) *bytes.Buffer {
+func (tc *TSCache) GenM3U8File(tsPath func(tsName string) (tsPath string)) []byte {
 	var seq int64
 	var maxDuration int64
 	m3u8body := bytes.NewBuffer(nil)
@@ -53,14 +53,14 @@ func (tc *TSCache) GenM3U8PlayList(tsBasePath string) *bytes.Buffer {
 		if seq == 0 {
 			seq = item.SeqNum
 		}
-		fmt.Fprintf(m3u8body, "#EXTINF:%.3f,\n%s.ts\n#EXT-X-BYTERANGE:%d\n", float64(item.Duration)/float64(1000), path.Join(tsBasePath, item.TsName), len(item.Data))
+		fmt.Fprintf(m3u8body, "#EXTINF:%.3f,\n%s\n#EXT-X-BYTERANGE:%d\n", float64(item.Duration)/float64(1000), tsPath(item.TsName), len(item.Data))
 	}
 	w := bytes.NewBuffer(make([]byte, 0, m3u8body.Len()+256))
 	fmt.Fprintf(w,
 		"#EXTM3U\n#EXT-X-VERSION:3\n#EXT-X-ALLOW-CACHE:NO\n#EXT-X-TARGETDURATION:%d\n#EXT-X-MEDIA-SEQUENCE:%d\n\n",
 		maxDuration/1000+1, seq)
 	m3u8body.WriteTo(w)
-	return w
+	return w.Bytes()
 }
 
 func (tc *TSCache) PushItem(item *TSItem) {
@@ -75,7 +75,7 @@ func (tc *TSCache) PushItem(item *TSItem) {
 }
 
 func (tc *TSCache) GetItem(tsName string) (*TSItem, error) {
-	tsName = strings.TrimSuffix(tsName, ".ts")
+	tsName = strings.TrimSuffix(tsName, filepath.Ext(tsName))
 	tc.lock.RLock()
 	defer tc.lock.RUnlock()
 	for e := tc.l.Front(); e != nil; e = e.Next() {
