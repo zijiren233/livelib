@@ -37,11 +37,25 @@ type Source struct {
 	tsparser    *parser.CodecParser
 	packetQueue chan *av.Packet
 
+	genTsNameFunc func() string
+
 	closed uint32
 	wg     sync.WaitGroup
 }
 
-func NewSource() *Source {
+type SourceConf func(*Source)
+
+func WithGenTsNameFunc(f func() string) SourceConf {
+	return func(s *Source) {
+		s.genTsNameFunc = f
+	}
+}
+
+func DefaultGenTsNameFunc() string {
+	return fmt.Sprint(time.Now().UnixMicro())
+}
+
+func NewSource(conf ...SourceConf) *Source {
 	s := &Source{
 		stat:        newStatus(),
 		cache:       newAudioCache(),
@@ -51,6 +65,11 @@ func NewSource() *Source {
 		tsparser:    parser.NewCodecParser(),
 		bwriter:     bytes.NewBuffer(make([]byte, 100*1024)),
 		packetQueue: make(chan *av.Packet, maxQueueNum),
+
+		genTsNameFunc: DefaultGenTsNameFunc,
+	}
+	for _, c := range conf {
+		c(s)
 	}
 	return s
 }
@@ -133,7 +152,7 @@ func (source *Source) cut() {
 		source.flushAudio()
 
 		source.seq++
-		source.tsCache.PushItem(NewTSItem(fmt.Sprint(time.Now().UnixMicro()), source.stat.durationMs(), source.seq, source.btswriter.Bytes()))
+		source.tsCache.PushItem(NewTSItem(source.genTsNameFunc(), source.stat.durationMs(), source.seq, source.btswriter.Bytes()))
 
 		source.btswriter.Reset()
 		source.stat.resetAndNew()
