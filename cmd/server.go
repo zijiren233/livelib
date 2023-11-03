@@ -44,8 +44,7 @@ func Server(cmd *cobra.Command, args []string) {
 	channels := rwmap.RWMap[string, *server.Channel]{}
 	s := server.NewRtmpServer(func(ReqAppName, ReqChannelName string, IsPublisher bool) (*server.Channel, error) {
 		c, _ := channels.LoadOrStore(ReqAppName, server.NewChannel())
-		c.InitHlsPlayer()
-		return c, nil
+		return c, c.InitHlsPlayer()
 	})
 	go s.Serve(tcp)
 	if flags.Dev {

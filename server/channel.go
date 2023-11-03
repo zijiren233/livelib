@@ -170,14 +170,14 @@ func (c *Channel) GetPlayers() ([]av.WriteCloser, error) {
 	return players, nil
 }
 
-func (c *Channel) InitHlsPlayer() error {
+func (c *Channel) InitHlsPlayer(conf ...hls.SourceConf) error {
 	c.wg.Add(1)
 	defer c.wg.Done()
 	if c.Closed() {
 		return ErrClosed
 	}
 	c.hlsOnce.Do(func() {
-		p := hls.NewSource()
+		p := hls.NewSource(conf...)
 		c.hlsWriter.Store(p)
 		go func() {
 			for {
@@ -185,7 +185,6 @@ func (c *Channel) InitHlsPlayer() error {
 					return
 				}
 				if err := c.AddPlayer(p); err != nil {
-					p.Close()
 					continue
 				}
 				p.SendPacket()
