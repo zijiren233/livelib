@@ -214,7 +214,7 @@ func (c *Channel) GenM3U8File(tsPath func(tsName string) (tsPath string)) ([]byt
 	if !c.InitdHlsPlayer() {
 		return nil, ErrHlsPlayerNotInit
 	}
-	return c.HlsPlayer().GetCacheInc().GenM3U8File(tsPath), nil
+	return c.HlsPlayer().GetCacheInc().GenM3U8File(tsPath)
 }
 
 func (c *Channel) GetTsFile(tsName string) ([]byte, error) {

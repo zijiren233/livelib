@@ -38,7 +38,7 @@ func (tc *TSCache) all() []*TSItem {
 	return items
 }
 
-func (tc *TSCache) GenM3U8File(tsPath func(tsName string) (tsPath string)) []byte {
+func (tc *TSCache) GenM3U8File(tsPath func(tsName string) (tsPath string)) ([]byte, error) {
 	var seq int64
 	var maxDuration int64
 	m3u8body := bytes.NewBuffer(nil)
@@ -53,14 +53,20 @@ func (tc *TSCache) GenM3U8File(tsPath func(tsName string) (tsPath string)) []byt
 		if seq == 0 {
 			seq = item.SeqNum
 		}
-		fmt.Fprintf(m3u8body, "#EXTINF:%.3f,\n%s\n#EXT-X-BYTERANGE:%d\n", float64(item.Duration)/float64(1000), tsPath(item.TsName), len(item.Data))
+		_, err := fmt.Fprintf(m3u8body, "#EXTINF:%.3f,\n%s\n", float64(item.Duration)/float64(1000), tsPath(item.TsName))
+		if err != nil {
+			return nil, err
+		}
 	}
 	w := bytes.NewBuffer(make([]byte, 0, m3u8body.Len()+256))
 	fmt.Fprintf(w,
-		"#EXTM3U\n#EXT-X-VERSION:3\n#EXT-X-ALLOW-CACHE:NO\n#EXT-X-TARGETDURATION:%d\n#EXT-X-MEDIA-SEQUENCE:%d\n\n",
+		"#EXTM3U\n#EXT-X-VERSION:3\n#EXT-X-ALLOW-CACHE:NO\n#EXT-X-TARGETDURATION:%d\n#EXT-X-MEDIA-SEQUENCE:%d\n",
 		maxDuration/1000+1, seq)
-	m3u8body.WriteTo(w)
-	return w.Bytes()
+	_, err := m3u8body.WriteTo(w)
+	if err != nil {
+		return nil, err
+	}
+	return w.Bytes(), nil
 }
 
 func (tc *TSCache) PushItem(item *TSItem) {
