@@ -90,5 +90,5 @@ func (fr *Reader) Read() (p *av.Packet, err error) {
 		}
 	}
 
-	return p, nil
+	return p, fr.demuxer.DemuxH(p)
 }
