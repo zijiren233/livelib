@@ -3,7 +3,6 @@ package flv
 import (
 	"errors"
 	"io"
-	"sync"
 	"sync/atomic"
 
 	"github.com/zijiren233/livelib/av"
@@ -30,7 +29,6 @@ type Writer struct {
 	bufSize   int
 
 	closed uint32
-	wg     sync.WaitGroup
 }
 
 type WriterConf func(*Writer)
@@ -103,7 +101,6 @@ func (w *Writer) Close() error {
 	if !atomic.CompareAndSwapUint32(&w.closed, 0, 1) {
 		return av.ErrClosed
 	}
-	w.wg.Wait()
 	return nil
 }
 
