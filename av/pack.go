@@ -15,6 +15,7 @@ type Packet struct {
 	StreamID   uint32
 	Header     PacketHeader
 	Data       []byte
+	First      bool
 }
 
 func (p *Packet) Type() uint8 {

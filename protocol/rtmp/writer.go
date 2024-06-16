@@ -64,7 +64,7 @@ func (w *Writer) Write(p *av.Packet) (err error) {
 	}
 
 	p = p.Clone()
-	p.TimeStamp = w.t.RecTimeStamp(p.TimeStamp)
+	p.TimeStamp = w.t.RecTimeStamp(p.TimeStamp, p.First)
 
 	select {
 	case w.packetQueue <- p:

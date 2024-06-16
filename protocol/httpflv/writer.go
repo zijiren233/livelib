@@ -63,7 +63,7 @@ func (w *HttpFlvWriter) Write(p *av.Packet) (err error) {
 		return av.ErrClosed
 	}
 	p = p.Clone()
-	p.TimeStamp = w.t.RecTimeStamp(p.TimeStamp)
+	p.TimeStamp = w.t.RecTimeStamp(p.TimeStamp, p.First)
 	select {
 	case w.packetQueue <- p:
 	default:

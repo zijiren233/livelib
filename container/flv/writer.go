@@ -83,7 +83,7 @@ func (w *Writer) Write(p *av.Packet) error {
 		return nil
 	}
 	dataLen := len(p.Data)
-	timestamp := w.t.RecTimeStamp(p.TimeStamp)
+	timestamp := w.t.RecTimeStamp(p.TimeStamp, p.First)
 
 	preDataLen := dataLen + headerLen
 	timestampExt := timestamp >> 24
