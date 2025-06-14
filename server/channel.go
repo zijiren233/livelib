@@ -3,8 +3,10 @@ package server
 import (
 	"context"
 	"errors"
+	"runtime"
 	"sync"
 	"sync/atomic"
+	"time"
 
 	"github.com/zijiren233/gencontainer/rwmap"
 	"github.com/zijiren233/livelib/av"
@@ -182,8 +184,16 @@ func (c *Channel) InitHlsPlayer(conf ...hls.SourceConf) error {
 		go func() {
 			for {
 				if err := c.AddPlayer(p); err != nil {
-					p.Close()
-					return
+					if errors.Is(err, ErrClosed) {
+						p.Close()
+						return
+					}
+					if errors.Is(err, ErrPusherNotInPublication) {
+						time.Sleep(time.Second)
+					} else {
+						runtime.Gosched()
+					}
+					continue
 				}
 				_ = p.SendPacket(context.Background())
 				p.Close()
