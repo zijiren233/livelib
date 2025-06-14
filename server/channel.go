@@ -187,7 +187,7 @@ func (c *Channel) InitHlsPlayer(conf ...hls.SourceConf) error {
 				}
 				_ = p.SendPacket(context.Background())
 				p.Close()
-				p = hls.NewSource()
+				p = hls.NewSource(conf...)
 				c.hlsWriter.Store(p)
 			}
 		}()
