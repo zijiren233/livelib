@@ -1,7 +1,7 @@
 package flv
 
 import (
-	"fmt"
+	"errors"
 
 	"github.com/zijiren233/livelib/av"
 )
@@ -143,8 +143,10 @@ func (tag *FlvTagBody) ParseMediaTagHeader(b []byte, isVideo bool) (n int, err e
 	return
 }
 
-var ErrInvalidAudioData = fmt.Errorf("invalid audio data")
-var ErrInvalidVideoData = fmt.Errorf("invalid video data")
+var (
+	ErrInvalidAudioData = errors.New("invalid audio data")
+	ErrInvalidVideoData = errors.New("invalid video data")
+)
 
 func (tag *FlvTagBody) parseAudioHeader(b []byte) (n int, err error) {
 	if len(b) < 1 {

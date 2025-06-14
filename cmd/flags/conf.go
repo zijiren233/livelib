@@ -1,8 +1,6 @@
 package flags
 
-var (
-	Dev bool
-)
+var Dev bool
 
 var (
 	Listen string

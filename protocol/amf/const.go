@@ -53,12 +53,12 @@ const (
 	AMF3_BYTEARRAY_MARKER = 0x0c
 )
 
-type ExternalHandler func(*Decoder, io.Reader) (interface{}, error)
+type ExternalHandler func(*Decoder, io.Reader) (any, error)
 
 type Decoder struct {
-	refCache         []interface{}
+	refCache         []any
 	stringRefs       []string
-	objectRefs       []interface{}
+	objectRefs       []any
 	traitRefs        []Trait
 	externalHandlers map[string]ExternalHandler
 }
@@ -73,13 +73,14 @@ func (d *Decoder) RegisterExternalHandler(name string, f ExternalHandler) {
 	d.externalHandlers[name] = f
 }
 
-type Encoder struct {
-}
+type Encoder struct{}
 
 type Version uint8
 
-type Array []interface{}
-type Object map[string]interface{}
+type (
+	Array  []any
+	Object map[string]any
+)
 
 type TypedObject struct {
 	Type   string

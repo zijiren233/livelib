@@ -1,6 +1,7 @@
 package server
 
 import (
+	"context"
 	"errors"
 	"sync"
 	"sync/atomic"
@@ -12,11 +13,12 @@ import (
 )
 
 type Channel struct {
-	inPublication uint32
+	inPublication bool
 	players       rwmap.RWMap[av.WriteCloser, *packWriter]
 
-	closed  uint32
-	wg      sync.WaitGroup
+	mu     sync.RWMutex
+	closed bool
+
 	hlsOnce sync.Once
 
 	hlsWriter atomic.Pointer[hls.Source]
@@ -32,12 +34,10 @@ func NewChannel(conf ...ChannelConf) *Channel {
 	return ch
 }
 
-func (c *Channel) InPublication() bool {
-	return atomic.LoadUint32(&c.inPublication) == 1
-}
-
-var ErrPusherAlreadyInPublication = errors.New("pusher already in publication")
-var ErrPusherNotInPublication = errors.New("pusher not in publication")
+var (
+	ErrPusherAlreadyInPublication = errors.New("pusher already in publication")
+	ErrPusherNotInPublication     = errors.New("pusher not in publication")
+)
 
 type packWriter struct {
 	init bool
@@ -68,17 +68,29 @@ var (
 )
 
 func (c *Channel) PushStart(pusher av.Reader) error {
-	if c.Closed() {
-		return ErrClosed
-	}
-	if !atomic.CompareAndSwapUint32(&c.inPublication, 0, 1) {
-		return ErrPusherAlreadyInPublication
-	}
-	defer atomic.CompareAndSwapUint32(&c.inPublication, 1, 0)
-
 	if pusher == nil {
 		return ErrPusherIsNil
 	}
+
+	c.mu.Lock()
+	if c.closed {
+		c.mu.Unlock()
+		return ErrClosed
+	}
+
+	if c.inPublication {
+		c.mu.Unlock()
+		return ErrPusherAlreadyInPublication
+	}
+	c.inPublication = true
+	c.mu.Unlock()
+
+	defer func() {
+		c.mu.Lock()
+		defer c.mu.Unlock()
+		c.kickAllPlayers()
+		c.inPublication = false
+	}()
 
 	cache := cache.NewCache()
 
@@ -89,6 +101,9 @@ func (c *Channel) PushStart(pusher av.Reader) error {
 		p, err := pusher.Read()
 		if err != nil {
 			return err
+		}
+		if c.Closed() {
+			return nil
 		}
 
 		cache.Write(p)
@@ -112,29 +127,38 @@ func (c *Channel) PushStart(pusher av.Reader) error {
 }
 
 func (c *Channel) Close() error {
-	if !atomic.CompareAndSwapUint32(&c.closed, 0, 1) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if c.closed {
 		return ErrClosed
 	}
 
-	c.wg.Wait()
+	c.kickAllPlayers()
+	return nil
+}
 
+func (c *Channel) kickAllPlayers() {
 	c.players.Range(func(w av.WriteCloser, player *packWriter) bool {
 		c.players.Delete(w)
 		player.GetWriter().Close()
 		return true
 	})
-	return nil
 }
 
 func (c *Channel) Closed() bool {
-	return atomic.LoadUint32(&c.closed) == 1
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	return c.closed
 }
 
 func (c *Channel) AddPlayer(w av.WriteCloser) error {
-	c.wg.Add(1)
-	defer c.wg.Done()
-	if c.Closed() {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if c.closed {
 		return ErrClosed
+	}
+	if !c.inPublication {
+		return ErrPusherNotInPublication
 	}
 	_, loaded := c.players.LoadOrStore(w, newPackWriterCloser(w))
 	if loaded {
@@ -143,55 +167,26 @@ func (c *Channel) AddPlayer(w av.WriteCloser) error {
 	return nil
 }
 
-func (c *Channel) DelPlayer(w av.WriteCloser) error {
-	c.wg.Add(1)
-	defer c.wg.Done()
-	if c.Closed() {
-		return ErrClosed
-	}
+func (c *Channel) DelPlayer(w av.WriteCloser) bool {
 	pw, loaded := c.players.LoadAndDelete(w)
 	if loaded {
 		pw.GetWriter().Close()
 	}
-	return nil
-}
-
-func (c *Channel) GetPlayers() ([]av.WriteCloser, error) {
-	c.wg.Add(1)
-	defer c.wg.Done()
-	if c.Closed() {
-		return nil, ErrClosed
-	}
-	players := make([]av.WriteCloser, 0)
-	c.players.Range(func(w av.WriteCloser, _ *packWriter) bool {
-		players = append(players, w)
-		return true
-	})
-	return players, nil
+	return loaded
 }
 
 func (c *Channel) InitHlsPlayer(conf ...hls.SourceConf) error {
-	c.wg.Add(1)
-	defer c.wg.Done()
-	if c.Closed() {
-		return ErrClosed
-	}
 	c.hlsOnce.Do(func() {
 		p := hls.NewSource(conf...)
 		c.hlsWriter.Store(p)
 		go func() {
 			for {
-				if c.Closed() {
-					return
-				}
 				if err := c.AddPlayer(p); err != nil {
-					continue
-				}
-				p.SendPacket()
-				p.Close()
-				if c.Closed() {
+					p.Close()
 					return
 				}
+				_ = p.SendPacket(context.Background())
+				p.Close()
 				p = hls.NewSource()
 				c.hlsWriter.Store(p)
 			}

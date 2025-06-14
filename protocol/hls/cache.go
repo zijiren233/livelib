@@ -31,7 +31,7 @@ func NewTSCacheItem() *TSCache {
 func (tc *TSCache) all() []*TSItem {
 	tc.lock.RLock()
 	defer tc.lock.RUnlock()
-	var items []*TSItem = make([]*TSItem, 0, tc.l.Len())
+	items := make([]*TSItem, 0, tc.l.Len())
 	for e := tc.l.Front(); e != nil; e = e.Next() {
 		items = append(items, e.Value)
 	}
@@ -53,15 +53,23 @@ func (tc *TSCache) GenM3U8File(tsPath func(tsName string) (tsPath string)) ([]by
 		if seq == 0 {
 			seq = item.SeqNum
 		}
-		_, err := fmt.Fprintf(m3u8body, "#EXTINF:%.3f,\n%s\n", float64(item.Duration)/float64(1000), tsPath(item.TsName))
+		_, err := fmt.Fprintf(
+			m3u8body,
+			"#EXTINF:%.3f,\n%s\n",
+			float64(item.Duration)/float64(1000),
+			tsPath(item.TsName),
+		)
 		if err != nil {
 			return nil, err
 		}
 	}
 	w := bytes.NewBuffer(make([]byte, 0, m3u8body.Len()+256))
-	fmt.Fprintf(w,
+	fmt.Fprintf(
+		w,
 		"#EXTM3U\n#EXT-X-VERSION:3\n#EXT-X-ALLOW-CACHE:NO\n#EXT-X-TARGETDURATION:%d\n#EXT-X-MEDIA-SEQUENCE:%d\n",
-		maxDuration/1000+1, seq)
+		maxDuration/1000+1,
+		seq,
+	)
 	_, err := m3u8body.WriteTo(w)
 	if err != nil {
 		return nil, err

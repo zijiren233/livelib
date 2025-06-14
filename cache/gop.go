@@ -1,14 +1,14 @@
 package cache
 
 import (
-	"fmt"
+	"errors"
 
 	"github.com/zijiren233/livelib/av"
 )
 
 var (
 	maxGOPCap    int = 1024
-	ErrGopTooBig     = fmt.Errorf("gop to big")
+	ErrGopTooBig     = errors.New("gop to big")
 )
 
 type array struct {

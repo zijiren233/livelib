@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"crypto/tls"
 	"crypto/x509"
+	"errors"
 	"fmt"
 	"io"
 	"net"
@@ -21,9 +22,7 @@ const (
 	connectSuccess = "NetConnection.Connect.Success"
 )
 
-var (
-	ErrFail = fmt.Errorf("respone err")
-)
+var ErrFail = errors.New("response err")
 
 type ConnClient struct {
 	transID    int
@@ -48,7 +47,7 @@ func NewConnClient() *ConnClient {
 	}
 }
 
-func (connClient *ConnClient) DecodeBatch(r io.Reader, ver amf.Version) (ret []interface{}, err error) {
+func (connClient *ConnClient) DecodeBatch(r io.Reader, ver amf.Version) (ret []any, err error) {
 	vs, err := connClient.decoder.DecodeBatch(r, ver)
 	return vs, err
 }
@@ -56,7 +55,7 @@ func (connClient *ConnClient) DecodeBatch(r io.Reader, ver amf.Version) (ret []i
 func (connClient *ConnClient) readRespMsg() error {
 	for {
 		rc, err := connClient.conn.Read()
-		if err != nil && err != io.EOF {
+		if err != nil && !errors.Is(err, io.EOF) {
 			return err
 		}
 		switch rc.TypeID {
@@ -70,7 +69,7 @@ func (connClient *ConnClient) readRespMsg() error {
 					switch connClient.curcmdName {
 					case cmdConnect, cmdCreateStream:
 						if v != respResult {
-							return fmt.Errorf(v)
+							return errors.New(v)
 						}
 
 					case cmdPublish:
@@ -83,11 +82,12 @@ func (connClient *ConnClient) readRespMsg() error {
 					case cmdConnect, cmdCreateStream:
 						id := int(v)
 
-						if k == 1 {
+						switch k {
+						case 1:
 							if id != connClient.transID {
 								return ErrFail
 							}
-						} else if k == 3 {
+						case 3:
 							connClient.streamid = uint32(id)
 						}
 					case cmdPublish:
@@ -116,7 +116,7 @@ func (connClient *ConnClient) readRespMsg() error {
 	}
 }
 
-func (connClient *ConnClient) writeMsg(args ...interface{}) error {
+func (connClient *ConnClient) writeMsg(args ...any) error {
 	connClient.bytesw.Reset()
 	for _, v := range args {
 		if _, err := connClient.encoder.Encode(connClient.bytesw, v, amf.AMF0); err != nil {
@@ -168,11 +168,10 @@ func (connClient *ConnClient) writeCreateStreamMsg() error {
 			return err
 		}
 
-		if err == ErrFail {
+		if errors.Is(err, ErrFail) {
 			return err
 		}
 	}
-
 }
 
 func (connClient *ConnClient) writePublishMsg() error {
@@ -193,7 +192,7 @@ func (connClient *ConnClient) writePlayMsg() error {
 	return connClient.readRespMsg()
 }
 
-func (connClient *ConnClient) Start(rtmpURL string, method string) error {
+func (connClient *ConnClient) Start(rtmpURL, method string) error {
 	u, err := neturl.Parse(rtmpURL)
 	if err != nil {
 		return err
@@ -252,11 +251,12 @@ func (connClient *ConnClient) Start(rtmpURL string, method string) error {
 		return err
 	}
 
-	if method == av.PUBLISH {
+	switch method {
+	case av.PUBLISH:
 		if err := connClient.writePublishMsg(); err != nil {
 			return err
 		}
-	} else if method == av.PLAY {
+	case av.PLAY:
 		if err := connClient.writePlayMsg(); err != nil {
 			return err
 		}
@@ -285,7 +285,7 @@ func (connClient *ConnClient) Read() (*ChunkStream, error) {
 	return connClient.conn.Read()
 }
 
-func (connClient *ConnClient) GetInfo() (app string, name string, url string) {
+func (connClient *ConnClient) GetInfo() (app, name, url string) {
 	app = connClient.app
 	name = connClient.title
 	url = connClient.url

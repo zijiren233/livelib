@@ -2,16 +2,16 @@ package hls
 
 import (
 	"bytes"
-	"fmt"
+	"context"
+	"errors"
+	"strconv"
 	"sync"
-	"sync/atomic"
 	"time"
 
 	"github.com/zijiren233/livelib/av"
 	"github.com/zijiren233/livelib/container/flv"
 	"github.com/zijiren233/livelib/container/ts"
 	"github.com/zijiren233/livelib/protocol/hls/parser"
-	"github.com/zijiren233/livelib/utils"
 )
 
 const (
@@ -24,7 +24,6 @@ const (
 
 type Source struct {
 	seq         int64
-	t           utils.Timestamp
 	bwriter     *bytes.Buffer
 	btswriter   *bytes.Buffer
 	demuxer     *flv.Demuxer
@@ -39,8 +38,8 @@ type Source struct {
 
 	genTsNameFunc func() string
 
-	closed uint32
-	wg     sync.WaitGroup
+	mu     sync.RWMutex
+	closed bool
 }
 
 type SourceConf func(*Source)
@@ -52,7 +51,7 @@ func WithGenTsNameFunc(f func() string) SourceConf {
 }
 
 func DefaultGenTsNameFunc() string {
-	return fmt.Sprint(time.Now().UnixMicro())
+	return strconv.FormatInt(time.Now().UnixMicro(), 10)
 }
 
 func NewSource(conf ...SourceConf) *Source {
@@ -79,49 +78,54 @@ func (source *Source) GetCacheInc() *TSCache {
 }
 
 func (source *Source) Write(p *av.Packet) (err error) {
-	source.wg.Add(1)
-	defer source.wg.Done()
-
-	if source.Closed() {
+	source.mu.Lock()
+	defer source.mu.Unlock()
+	if source.closed {
 		return av.ErrClosed
 	}
 
-	p = p.Clone()
-	p.TimeStamp = source.t.RecTimeStamp(p.TimeStamp, p.First)
-
-	select {
-	case source.packetQueue <- p:
-	default:
-		av.DropPacket(source.packetQueue)
+	for {
+		select {
+		case source.packetQueue <- p:
+			return
+		default:
+			av.DropPacket(source.packetQueue)
+		}
 	}
-	return
 }
 
-func (source *Source) SendPacket() error {
-	for p := range source.packetQueue {
-		if p.IsMetadata {
-			continue
-		}
-		p = p.DeepClone()
-		err := source.demuxer.Demux(p)
-		if err != nil {
-			if err == flv.ErrAvcEndSEQ {
+func (source *Source) SendPacket(ctx context.Context) error {
+	for {
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case p, ok := <-source.packetQueue:
+			if !ok {
+				return nil
+			}
+			if p.IsMetadata {
 				continue
 			}
-			return err
-		}
+			p = p.DeepClone()
+			err := source.demuxer.Demux(p)
+			if err != nil {
+				if errors.Is(err, flv.ErrAvcEndSEQ) {
+					continue
+				}
+				return err
+			}
 
-		compositionTime, isSeq, err := source.parse(p)
-		if err != nil || isSeq {
-			continue
-		}
-		if source.btswriter != nil {
-			source.stat.update(p.IsVideo, p.TimeStamp)
-			source.calcPtsDts(p.IsVideo, p.TimeStamp, uint32(compositionTime))
-			source.tsMux(p)
+			compositionTime, isSeq, err := source.parse(p)
+			if err != nil || isSeq {
+				continue
+			}
+			if source.btswriter != nil {
+				source.stat.update(p.IsVideo, p.TimeStamp)
+				source.calcPtsDts(p.IsVideo, p.TimeStamp, uint32(compositionTime))
+				source.tsMux(p)
+			}
 		}
 	}
-	return nil
 }
 
 // func (source *Source) cleanup() {
@@ -132,16 +136,14 @@ func (source *Source) SendPacket() error {
 // }
 
 func (source *Source) Close() error {
-	if !atomic.CompareAndSwapUint32(&source.closed, 0, 1) {
+	source.mu.Lock()
+	defer source.mu.Unlock()
+	if source.closed {
 		return av.ErrClosed
 	}
-	source.wg.Wait()
+	source.closed = true
 	close(source.packetQueue)
 	return nil
-}
-
-func (source *Source) Closed() bool {
-	return atomic.LoadUint32(&source.closed) == 1
 }
 
 func (source *Source) cut() {
@@ -209,6 +211,7 @@ func (source *Source) calcPtsDts(isVideo bool, ts, compositionTs uint32) {
 		source.pts = source.dts
 	}
 }
+
 func (source *Source) flushAudio() error {
 	return source.muxAudio(1)
 }

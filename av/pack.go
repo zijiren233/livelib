@@ -15,7 +15,6 @@ type Packet struct {
 	StreamID   uint32
 	Header     PacketHeader
 	Data       []byte
-	First      bool
 }
 
 func (p *Packet) Type() uint8 {
@@ -29,12 +28,12 @@ func (p *Packet) Type() uint8 {
 }
 
 func (p *Packet) Clone() *Packet {
-	var tp = *p
+	tp := *p
 	return &tp
 }
 
 func (p *Packet) DeepClone() *Packet {
-	var tp = *p
+	tp := *p
 	tp.Data = make([]byte, len(p.Data))
 	copy(tp.Data, p.Data)
 	return &tp
@@ -63,8 +62,7 @@ func DropNPacket(pktQue chan *Packet, dn int) (n int) {
 	}
 }
 
-type PacketHeader interface {
-}
+type PacketHeader any
 
 type AudioPacketHeader interface {
 	PacketHeader

@@ -1,18 +1,16 @@
 package hls
 
-import (
-	"fmt"
-)
+import "errors"
 
 const (
 	duration = 3000
 )
 
 var (
-	ErrNoPublisher         = fmt.Errorf("no publisher")
-	ErrInvalidReq          = fmt.Errorf("invalid req url path")
-	ErrNoSupportVideoCodec = fmt.Errorf("no support video codec")
-	ErrNoSupportAudioCodec = fmt.Errorf("no support audio codec")
+	ErrNoPublisher         = errors.New("no publisher")
+	ErrInvalidReq          = errors.New("invalid req url path")
+	ErrNoSupportVideoCodec = errors.New("no support video codec")
+	ErrNoSupportAudioCodec = errors.New("no support audio codec")
 )
 
 const (

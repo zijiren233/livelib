@@ -83,7 +83,7 @@ func (w *Writer) Write(p *av.Packet) error {
 		return nil
 	}
 	dataLen := len(p.Data)
-	timestamp := w.t.RecTimeStamp(p.TimeStamp, p.First)
+	timestamp := p.TimeStamp
 
 	preDataLen := dataLen + headerLen
 	timestampExt := timestamp >> 24
@@ -97,6 +97,7 @@ func (w *Writer) Write(p *av.Packet) error {
 		Bytes(p.Data).
 		U32(uint32(preDataLen)).Error()
 }
+
 func (w *Writer) Close() error {
 	if !atomic.CompareAndSwapUint32(&w.closed, 0, 1) {
 		return av.ErrClosed

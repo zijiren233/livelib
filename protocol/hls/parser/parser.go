@@ -1,7 +1,7 @@
 package parser
 
 import (
-	"fmt"
+	"errors"
 	"io"
 
 	"github.com/zijiren233/livelib/av"
@@ -10,9 +10,7 @@ import (
 	"github.com/zijiren233/livelib/protocol/hls/parser/mp3"
 )
 
-var (
-	errNoAudio = fmt.Errorf("demuxer no audio")
-)
+var errNoAudio = errors.New("demuxer no audio")
 
 type CodecParser struct {
 	aac  *aac.Parser
@@ -35,7 +33,6 @@ func (codeParser *CodecParser) SampleRate() (int, error) {
 }
 
 func (codeParser *CodecParser) Parse(p *av.Packet, w io.Writer) (err error) {
-
 	switch p.IsVideo {
 	case true:
 		f, ok := p.Header.(av.VideoPacketHeader)
@@ -63,7 +60,6 @@ func (codeParser *CodecParser) Parse(p *av.Packet, w io.Writer) (err error) {
 				err = codeParser.mp3.Parse(p.Data)
 			}
 		}
-
 	}
-	return
+	return err
 }

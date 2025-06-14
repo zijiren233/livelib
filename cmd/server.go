@@ -33,7 +33,13 @@ var ServerCmd = &cobra.Command{
 
 func Server(cmd *cobra.Command, args []string) {
 	host := fmt.Sprintf("%s:%d", flags.Listen, flags.Port)
-	fmt.Printf("Run on tcp://%s\nRtmp: rtmp://%s/{app}/{channel}\nWebAPI: http://%s/{app}/{channel}\n", host, host, host)
+	fmt.Printf(
+		"Run on tcp://%s\nRtmp: rtmp://%s/{app}\nRtmp Secret: {channel}\nHls: http://%s/{app}/{channel}.m3u8\nFlv: http://%s/{app}/{channel}.flv\n",
+		host,
+		host,
+		host,
+		host,
+	)
 	listener, err := net.Listen("tcp", host)
 	if err != nil {
 		log.Panic(err)
@@ -42,10 +48,12 @@ func Server(cmd *cobra.Command, args []string) {
 	httpl := muxer.Match(cmux.HTTP1Fast())
 	tcp := muxer.Match(cmux.Any())
 	channels := rwmap.RWMap[string, *server.Channel]{}
-	s := server.NewRtmpServer(func(ReqAppName, ReqChannelName string, IsPublisher bool) (*server.Channel, error) {
-		c, _ := channels.LoadOrStore(ReqAppName, server.NewChannel())
-		return c, c.InitHlsPlayer()
-	})
+	s := server.NewRtmpServer(
+		func(ReqAppName, ReqChannelName string, IsPublisher bool) (*server.Channel, error) {
+			c, _ := channels.LoadOrStore(ReqAppName, server.NewChannel())
+			return c, c.InitHlsPlayer()
+		},
+	)
 	go s.Serve(tcp)
 	if flags.Dev {
 		gin.SetMode(gin.DebugMode)
@@ -73,11 +81,23 @@ func Server(cmd *cobra.Command, args []string) {
 		case ".flv":
 			w := httpflv.NewHttpFLVWriter(ctx.Writer)
 			defer w.Close()
-			channel.AddPlayer(w)
-			w.SendPacket()
+			err := channel.AddPlayer(w)
+			if err != nil {
+				ctx.AbortWithStatusJSON(http.StatusNotFound, gin.H{
+					"error": err.Error(),
+				})
+				return
+			}
+			w.SendPacket(ctx.Request.Context())
 		case ".m3u8":
 			b, err := channel.GenM3U8File(func(tsName string) (tsPath string) {
-				return fmt.Sprintf("/%s/%s/%s.%s", appName, channelName, tsName, ctx.DefaultQuery("t", "ts"))
+				return fmt.Sprintf(
+					"/%s/%s/%s.%s",
+					appName,
+					channelName,
+					tsName,
+					ctx.DefaultQuery("t", "ts"),
+				)
 			})
 			if err != nil {
 				ctx.AbortWithStatusJSON(http.StatusNotFound, gin.H{

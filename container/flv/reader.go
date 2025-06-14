@@ -11,13 +11,12 @@ import (
 )
 
 type Reader struct {
-	r                 *stream.Reader
-	inited            bool
-	demuxer           *Demuxer
-	tagHeaderBuf      []byte
-	bufSize           int
-	FlvTagHeader      FlvTagHeader
-	loadedFirstPacket bool
+	r            *stream.Reader
+	inited       bool
+	demuxer      *Demuxer
+	tagHeaderBuf []byte
+	bufSize      int
+	FlvTagHeader FlvTagHeader
 }
 
 type ReaderConf func(*Reader)
@@ -41,8 +40,10 @@ func NewReader(r io.Reader, conf ...ReaderConf) *Reader {
 	return reader
 }
 
-var ErrHeader = errors.New("read flv header error")
-var ErrPreDataLen = errors.New("read flv pre data len error")
+var (
+	ErrHeader     = errors.New("read flv header error")
+	ErrPreDataLen = errors.New("read flv pre data len error")
+)
 
 func (fr *Reader) Read() (p *av.Packet, err error) {
 	if !fr.inited {
@@ -84,15 +85,10 @@ func (fr *Reader) Read() (p *av.Packet, err error) {
 		return nil, ErrPreDataLen
 	}
 
-	if !fr.loadedFirstPacket {
-		fr.loadedFirstPacket = true
-		p.First = true
-	}
-
 	if p.IsMetadata {
 		p.Data, err = amf.MetaDataReform(p.Data, amf.ADD)
 		if err != nil {
-			return
+			return p, err
 		}
 		return p, nil
 	} else {

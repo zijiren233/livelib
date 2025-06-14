@@ -23,10 +23,12 @@ type Client struct {
 	gopSize int
 }
 
-var ErrAlreadyDialed = errors.New("already dialed")
-var ErrMethodNotSupport = errors.New("method not support")
+var (
+	ErrAlreadyDialed    = errors.New("already dialed")
+	ErrMethodNotSupport = errors.New("method not support")
+)
 
-func Dial(url string, method string) (*Client, error) {
+func Dial(url, method string) (*Client, error) {
 	if method != av.PUBLISH && method != av.PLAY {
 		return nil, ErrMethodNotSupport
 	}
@@ -173,5 +175,5 @@ func (c *Client) PushStart(ctx context.Context, src av.Reader) error {
 			}
 		}
 	}()
-	return pusher.SendPacket()
+	return pusher.SendPacket(ctx)
 }

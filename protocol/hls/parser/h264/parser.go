@@ -2,7 +2,7 @@ package h264
 
 import (
 	"bytes"
-	"fmt"
+	"errors"
 	"io"
 )
 
@@ -19,13 +19,13 @@ const (
 	nalu_type_dpb        byte = 3  // slice_data_partition_b_layer_rbsp( )
 	nalu_type_dpc        byte = 4  // slice_data_partition_c_layer_rbsp( )
 	nalu_type_idr        byte = 5  // slice_layer_without_partitioning_rbsp( ),sliceheader
-	nalu_type_sei        byte = 6  //sei_rbsp( )
-	nalu_type_sps        byte = 7  //seq_parameter_set_rbsp( )
-	nalu_type_pps        byte = 8  //pic_parameter_set_rbsp( )
+	nalu_type_sei        byte = 6  // sei_rbsp( )
+	nalu_type_sps        byte = 7  // seq_parameter_set_rbsp( )
+	nalu_type_pps        byte = 8  // pic_parameter_set_rbsp( )
 	nalu_type_aud        byte = 9  // access_unit_delimiter_rbsp( )
-	nalu_type_eoesq      byte = 10 //end_of_seq_rbsp( )
-	nalu_type_eostream   byte = 11 //end_of_stream_rbsp( )
-	nalu_type_filler     byte = 12 //filler_data_rbsp( )
+	nalu_type_eoesq      byte = 10 // end_of_seq_rbsp( )
+	nalu_type_eostream   byte = 11 // end_of_stream_rbsp( )
+	nalu_type_filler     byte = 12 // filler_data_rbsp( )
 )
 
 const (
@@ -34,18 +34,20 @@ const (
 )
 
 var (
-	decDataNil        = fmt.Errorf("dec buf is nil")
-	spsDataError      = fmt.Errorf("sps data error")
-	ppsHeaderError    = fmt.Errorf("pps header error")
-	ppsDataError      = fmt.Errorf("pps data error")
-	naluHeaderInvalid = fmt.Errorf("nalu header invalid")
-	videoDataInvalid  = fmt.Errorf("video data not match")
-	dataSizeNotMatch  = fmt.Errorf("data size not match")
-	naluBodyLenError  = fmt.Errorf("nalu body len error")
+	decDataNil        = errors.New("dec buf is nil")
+	spsDataError      = errors.New("sps data error")
+	ppsHeaderError    = errors.New("pps header error")
+	ppsDataError      = errors.New("pps data error")
+	naluHeaderInvalid = errors.New("nalu header invalid")
+	videoDataInvalid  = errors.New("video data not match")
+	dataSizeNotMatch  = errors.New("data size not match")
+	naluBodyLenError  = errors.New("nalu body len error")
 )
 
-var startCode = []byte{0x00, 0x00, 0x00, 0x01}
-var naluAud = []byte{0x00, 0x00, 0x00, 0x01, 0x09, 0xf0}
+var (
+	startCode = []byte{0x00, 0x00, 0x00, 0x01}
+	naluAud   = []byte{0x00, 0x00, 0x00, 0x01, 0x09, 0xf0}
+)
 
 type Parser struct {
 	frameType    byte
@@ -54,15 +56,15 @@ type Parser struct {
 }
 
 type sequenceHeader struct {
-	configVersion        byte //8bits
-	avcProfileIndication byte //8bits
-	profileCompatility   byte //8bits
-	avcLevelIndication   byte //8bits
-	reserved1            byte //6bits
-	naluLen              byte //2bits
-	reserved2            byte //3bits
-	spsNum               byte //5bits
-	ppsNum               byte //8bits
+	configVersion        byte // 8bits
+	avcProfileIndication byte // 8bits
+	profileCompatility   byte // 8bits
+	avcLevelIndication   byte // 8bits
+	reserved1            byte // 6bits
+	naluLen              byte // 2bits
+	reserved2            byte // 3bits
+	spsNum               byte // 5bits
+	ppsNum               byte // 8bits
 	spsLen               int
 	ppsLen               int
 }
@@ -90,7 +92,7 @@ func (parser *Parser) parseSpecificInfo(src []byte) error {
 	seq.naluLen = src[4]&0x03 + 1
 	seq.reserved2 = src[5] >> 5
 
-	//get sps
+	// get sps
 	seq.spsNum = src[5] & 0x1f
 	seq.spsLen = int(src[6])<<8 | int(src[7])
 
@@ -100,7 +102,7 @@ func (parser *Parser) parseSpecificInfo(src []byte) error {
 	sps = append(sps, startCode...)
 	sps = append(sps, src[8:(8+seq.spsLen)]...)
 
-	//get pps
+	// get pps
 	tmpBuf := src[(8 + seq.spsLen):]
 	if len(tmpBuf) < 4 {
 		return ppsHeaderError
@@ -132,11 +134,11 @@ func (parser *Parser) isNaluHeader(src []byte) bool {
 
 func (parser *Parser) naluSize(src []byte) (int, error) {
 	if len(src) < naluBytesLen {
-		return 0, fmt.Errorf("nalusizedata invalid")
+		return 0, errors.New("nalusizedata invalid")
 	}
 	buf := src[:naluBytesLen]
 	size := int(0)
-	for i := 0; i < len(buf); i++ {
+	for i := range buf {
 		size = size<<8 + int(buf[i])
 	}
 	return size, nil

@@ -1,9 +1,9 @@
 package rtmp
 
 import (
+	"context"
 	"reflect"
 	"sync"
-	"sync/atomic"
 	"time"
 
 	"github.com/zijiren233/livelib/av"
@@ -17,8 +17,8 @@ type Writer struct {
 	packetQueue chan *av.Packet
 	WriteBWInfo StaticsBW
 
-	closed uint32
-	wg     sync.WaitGroup
+	closed bool
+	mu     sync.RWMutex
 }
 
 func NewWriter(conn ChunkWriter) *Writer {
@@ -56,56 +56,59 @@ func (w *Writer) SaveStatics(streamid uint32, length uint64, isVideoFlag bool) {
 }
 
 func (w *Writer) Write(p *av.Packet) (err error) {
-	w.wg.Add(1)
-	defer w.wg.Done()
-
-	if w.Closed() {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	if w.closed {
 		return av.ErrClosed
 	}
 
-	p = p.Clone()
-	p.TimeStamp = w.t.RecTimeStamp(p.TimeStamp, p.First)
-
-	select {
-	case w.packetQueue <- p:
-	default:
-		av.DropPacket(w.packetQueue)
+	for {
+		select {
+		case w.packetQueue <- p:
+			return
+		default:
+			av.DropPacket(w.packetQueue)
+		}
 	}
-	return
 }
 
-func (w *Writer) SendPacket() error {
+func (w *Writer) SendPacket(ctx context.Context) error {
 	Flush := reflect.ValueOf(w.conn).MethodByName("Flush")
-	var cs = new(core.ChunkStream)
-	for p := range w.packetQueue {
-		cs.Data = p.Data
-		cs.Length = uint32(len(p.Data))
-		cs.StreamID = p.StreamID
+	cs := new(core.ChunkStream)
+	for {
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case p, ok := <-w.packetQueue:
+			if !ok {
+				return nil
+			}
+			cs.Data = p.Data
+			cs.Length = uint32(len(p.Data))
+			cs.StreamID = p.StreamID
 
-		cs.TypeID = uint32(p.Type())
+			cs.TypeID = uint32(p.Type())
 
-		w.SaveStatics(p.StreamID, uint64(cs.Length), p.IsVideo)
-		cs.Timestamp = p.TimeStamp
-		if err := w.conn.Write(cs); err != nil {
-			return err
-		}
-		v := Flush.Call(nil)
-		if v[0].Interface() != nil {
-			return v[0].Interface().(error)
+			w.SaveStatics(p.StreamID, uint64(cs.Length), p.IsVideo)
+			cs.Timestamp = p.TimeStamp
+			if err := w.conn.Write(cs); err != nil {
+				return err
+			}
+			v := Flush.Call(nil)
+			if v[0].Interface() != nil {
+				return v[0].Interface().(error)
+			}
 		}
 	}
-	return nil
 }
 
 func (w *Writer) Close() error {
-	if !atomic.CompareAndSwapUint32(&w.closed, 0, 1) {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	if w.closed {
 		return av.ErrClosed
 	}
-	w.wg.Wait()
+	w.closed = true
 	close(w.packetQueue)
 	return nil
-}
-
-func (w *Writer) Closed() bool {
-	return atomic.LoadUint32(&w.closed) == 1
 }

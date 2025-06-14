@@ -5,8 +5,8 @@ import (
 	"io"
 )
 
-func (d *Decoder) DecodeBatch(r io.Reader, ver Version) (ret []interface{}, err error) {
-	var v interface{}
+func (d *Decoder) DecodeBatch(r io.Reader, ver Version) (ret []any, err error) {
+	var v any
 	for {
 		v, err = d.Decode(r, ver)
 		if err != nil {
@@ -17,7 +17,7 @@ func (d *Decoder) DecodeBatch(r io.Reader, ver Version) (ret []interface{}, err 
 	return
 }
 
-func (d *Decoder) Decode(r io.Reader, ver Version) (interface{}, error) {
+func (d *Decoder) Decode(r io.Reader, ver Version) (any, error) {
 	switch ver {
 	case 0:
 		return d.DecodeAmf0(r)
@@ -28,7 +28,7 @@ func (d *Decoder) Decode(r io.Reader, ver Version) (interface{}, error) {
 	return nil, fmt.Errorf("decode amf: unsupported version %d", ver)
 }
 
-func (e *Encoder) EncodeBatch(w io.Writer, ver Version, val ...interface{}) (int, error) {
+func (e *Encoder) EncodeBatch(w io.Writer, ver Version, val ...any) (int, error) {
 	for _, v := range val {
 		if _, err := e.Encode(w, v, ver); err != nil {
 			return 0, err
@@ -37,7 +37,7 @@ func (e *Encoder) EncodeBatch(w io.Writer, ver Version, val ...interface{}) (int
 	return 0, nil
 }
 
-func (e *Encoder) Encode(w io.Writer, val interface{}, ver Version) (int, error) {
+func (e *Encoder) Encode(w io.Writer, val any, ver Version) (int, error) {
 	switch ver {
 	case AMF0:
 		return e.EncodeAmf0(w, val)

@@ -13,5 +13,6 @@ var ClientCmd = &cobra.Command{
 
 func init() {
 	RootCmd.AddCommand(ClientCmd)
-	ClientCmd.PersistentFlags().StringVar(&flags.Dial, "dial", "rtmp://127.0.0.1:1935/app/channel", "dial to server")
+	ClientCmd.PersistentFlags().
+		StringVar(&flags.Dial, "dial", "rtmp://127.0.0.1:1935/app/channel", "dial to server")
 }

@@ -8,7 +8,7 @@ type TSItem struct {
 }
 
 func NewTSItem(tsName string, duration, seqNum int64, b []byte) *TSItem {
-	var item = new(TSItem)
+	item := new(TSItem)
 	item.TsName = tsName
 	item.SeqNum = seqNum
 	item.Duration = duration

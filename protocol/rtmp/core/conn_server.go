@@ -2,7 +2,7 @@ package core
 
 import (
 	"bytes"
-	"fmt"
+	"errors"
 	"io"
 
 	"github.com/zijiren233/livelib/av"
@@ -13,9 +13,7 @@ const (
 	publishLive = "live"
 )
 
-var (
-	ErrReq = fmt.Errorf("req error")
-)
+var ErrReq = errors.New("req error")
 
 const (
 	cmdConnect       = "connect"
@@ -29,15 +27,15 @@ const (
 )
 
 type ConnectInfo struct {
-	App            string `amf:"app" json:"app"`
-	Flashver       string `amf:"flashVer" json:"flashVer"`
-	SwfUrl         string `amf:"swfUrl" json:"swfUrl"`
-	TcUrl          string `amf:"tcUrl" json:"tcUrl"`
-	Fpad           bool   `amf:"fpad" json:"fpad"`
-	AudioCodecs    int    `amf:"audioCodecs" json:"audioCodecs"`
-	VideoCodecs    int    `amf:"videoCodecs" json:"videoCodecs"`
-	VideoFunction  int    `amf:"videoFunction" json:"videoFunction"`
-	PageUrl        string `amf:"pageUrl" json:"pageUrl"`
+	App            string `amf:"app"            json:"app"`
+	Flashver       string `amf:"flashVer"       json:"flashVer"`
+	SwfUrl         string `amf:"swfUrl"         json:"swfUrl"`
+	TcUrl          string `amf:"tcUrl"          json:"tcUrl"`
+	Fpad           bool   `amf:"fpad"           json:"fpad"`
+	AudioCodecs    int    `amf:"audioCodecs"    json:"audioCodecs"`
+	VideoCodecs    int    `amf:"videoCodecs"    json:"videoCodecs"`
+	VideoFunction  int    `amf:"videoFunction"  json:"videoFunction"`
+	PageUrl        string `amf:"pageUrl"        json:"pageUrl"`
 	ObjectEncoding int    `amf:"objectEncoding" json:"objectEncoding"`
 }
 
@@ -81,7 +79,7 @@ func NewConnServer(conn *Conn) *ConnServer {
 	}
 }
 
-func (connServer *ConnServer) writeMsg(csid, streamID uint32, args ...interface{}) error {
+func (connServer *ConnServer) writeMsg(csid, streamID uint32, args ...any) error {
 	connServer.bytesw.Reset()
 	for _, v := range args {
 		if _, err := connServer.encoder.Encode(connServer.bytesw, v, amf.AMF0); err != nil {
@@ -102,7 +100,7 @@ func (connServer *ConnServer) writeMsg(csid, streamID uint32, args ...interface{
 	return connServer.conn.Flush()
 }
 
-func (connServer *ConnServer) connect(vs []interface{}) error {
+func (connServer *ConnServer) connect(vs []any) error {
 	for _, v := range vs {
 		switch v := v.(type) {
 		case string:
@@ -150,7 +148,7 @@ func (connServer *ConnServer) connectResp(CSID, StreamID uint32) error {
 	return connServer.writeMsg(CSID, StreamID, "_result", connServer.transactionID, resp, event)
 }
 
-func (connServer *ConnServer) createStream(vs []interface{}) error {
+func (connServer *ConnServer) createStream(vs []any) error {
 	for _, v := range vs {
 		switch v := v.(type) {
 		case string:
@@ -163,16 +161,24 @@ func (connServer *ConnServer) createStream(vs []interface{}) error {
 }
 
 func (connServer *ConnServer) createStreamResp(CSID, StreamID uint32) error {
-	return connServer.writeMsg(CSID, StreamID, "_result", connServer.transactionID, nil, connServer.streamID)
+	return connServer.writeMsg(
+		CSID,
+		StreamID,
+		"_result",
+		connServer.transactionID,
+		nil,
+		connServer.streamID,
+	)
 }
 
-func (connServer *ConnServer) publishOrPlay(vs []interface{}) error {
+func (connServer *ConnServer) publishOrPlay(vs []any) error {
 	for k, v := range vs {
 		switch v := v.(type) {
 		case string:
-			if k == 2 {
+			switch k {
+			case 2:
 				connServer.PublishInfo.Name = v
-			} else if k == 3 {
+			case 3:
 				connServer.PublishInfo.Type = v
 			}
 		case float64:
@@ -233,7 +239,7 @@ func (connServer *ConnServer) handleCmdMsg(c *ChunkStream) error {
 	}
 	r := bytes.NewReader(c.Data)
 	vi, err := connServer.decoder.DecodeBatch(r, amf.Version(amf.AMF0))
-	if err != nil && err != io.EOF {
+	if err != nil && !errors.Is(err, io.EOF) {
 		return err
 	}
 
@@ -328,7 +334,7 @@ func (connServer *ConnServer) Read() (*ChunkStream, error) {
 	return connServer.conn.Read()
 }
 
-func (connServer *ConnServer) GetInfo() (app string, name string) {
+func (connServer *ConnServer) GetInfo() (app, name string) {
 	app = connServer.ConnInfo.App
 	name = connServer.PublishInfo.Name
 	return

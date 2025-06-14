@@ -5,17 +5,15 @@ import (
 	"crypto/hmac"
 	"crypto/rand"
 	"crypto/sha256"
+	"errors"
 	"fmt"
 	"io"
-
 	"time"
 
 	"github.com/zijiren233/stream"
 )
 
-var (
-	timeout = 5 * time.Second
-)
+var timeout = 5 * time.Second
 
 var (
 	hsClientFullKey = []byte{
@@ -39,7 +37,7 @@ var (
 	hsServerPartialKey = hsServerFullKey[:36]
 )
 
-func hsMakeDigest(key []byte, src []byte, gap int) (dst []byte) {
+func hsMakeDigest(key, src []byte, gap int) (dst []byte) {
 	h := hmac.New(sha256.New, key)
 	if gap <= 0 {
 		h.Write(src)
@@ -51,14 +49,14 @@ func hsMakeDigest(key []byte, src []byte, gap int) (dst []byte) {
 }
 
 func hsCalcDigestPos(p []byte, base int) (pos int) {
-	for i := 0; i < 4; i++ {
+	for i := range 4 {
 		pos += int(p[base+i])
 	}
 	pos = (pos % 728) + base + 4
 	return
 }
 
-func hsFindDigest(p []byte, key []byte, base int) int {
+func hsFindDigest(p, key []byte, base int) int {
 	gap := hsCalcDigestPos(p, base)
 	digest := hsMakeDigest(key, p, gap)
 	if !bytes.Equal(p[gap:gap+32], digest) {
@@ -67,7 +65,7 @@ func hsFindDigest(p []byte, key []byte, base int) int {
 	return gap
 }
 
-func hsParse1(p []byte, peerkey []byte, key []byte) (ok bool, digest []byte) {
+func hsParse1(p, peerkey, key []byte) (ok bool, digest []byte) {
 	var pos int
 	if pos = hsFindDigest(p, peerkey, 772); pos == -1 {
 		if pos = hsFindDigest(p, peerkey, 8); pos == -1 {
@@ -79,7 +77,7 @@ func hsParse1(p []byte, peerkey []byte, key []byte) (ok bool, digest []byte) {
 	return
 }
 
-func hsCreate01(p []byte, time uint32, ver uint32, key []byte) {
+func hsCreate01(p []byte, time, ver uint32, key []byte) {
 	p[0] = 3
 	p1 := p[1:]
 	rand.Read(p1[8:])
@@ -90,7 +88,7 @@ func hsCreate01(p []byte, time uint32, ver uint32, key []byte) {
 	copy(p1[gap:], digest)
 }
 
-func hsCreate2(p []byte, key []byte) {
+func hsCreate2(p, key []byte) {
 	rand.Read(p)
 	gap := len(p) - 32
 	digest := hsMakeDigest(key, p, gap)
@@ -110,17 +108,17 @@ func (conn *Conn) HandshakeClient() (err error) {
 	// > C0C1
 	conn.Conn.SetDeadline(time.Now().Add(timeout))
 	if _, err = conn.rw.Write(C0C1); err != nil {
-		return
+		return err
 	}
 	conn.Conn.SetDeadline(time.Now().Add(timeout))
 	if err = conn.rw.Flush(); err != nil {
-		return
+		return err
 	}
 
 	// < S0S1S2
 	conn.Conn.SetDeadline(time.Now().Add(timeout))
 	if _, err = io.ReadFull(conn.rw, S0S1S2); err != nil {
-		return
+		return err
 	}
 
 	S1 := S0S1S2[1 : 1536+1]
@@ -134,20 +132,20 @@ func (conn *Conn) HandshakeClient() (err error) {
 	// > C2
 	conn.Conn.SetDeadline(time.Now().Add(timeout))
 	if _, err = conn.rw.Write(C2); err != nil {
-		return
+		return err
 	}
 	conn.Conn.SetDeadline(time.Time{})
-	return
+	return err
 }
 
 func (conn *Conn) HandshakeServer() error {
-	var C = make([]byte, 1+1536*2)
+	C := make([]byte, 1+1536*2)
 	C0 := C[:1]
 	C1 := C[1 : 1536+1]
 	C0C1 := C[:1536+1]
 	C2 := C[1536+1:]
 
-	var S = make([]byte, 1+1536*2)
+	S := make([]byte, 1+1536*2)
 	S0 := S[:1]
 	S1 := S[1 : 1536+1]
 	S0S1 := S[:1536+1]
@@ -169,7 +167,7 @@ func (conn *Conn) HandshakeServer() error {
 	clientVersion := stream.BigEndian.ReadU32(C1[4:8])
 	if clientVersion != 0 {
 		if ok, digest := hsParse1(C1, hsClientPartialKey, hsServerFullKey); !ok {
-			return fmt.Errorf("rtmp: handshake server: C1 invalid")
+			return errors.New("rtmp: handshake server: C1 invalid")
 		} else {
 			hsCreate01(S0S1, servertime, serverVersion, hsServerPartialKey)
 			hsCreate2(S2, digest)

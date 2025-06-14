@@ -1,7 +1,7 @@
 package aac
 
 import (
-	"fmt"
+	"errors"
 	"io"
 
 	"github.com/zijiren233/livelib/av"
@@ -23,11 +23,25 @@ type mpegCfgInfo struct {
 	extension      *mpegExtension
 }
 
-var aacRates = []int{96000, 88200, 64000, 48000, 44100, 32000, 24000, 22050, 16000, 12000, 11025, 8000, 7350}
+var aacRates = []int{
+	96000,
+	88200,
+	64000,
+	48000,
+	44100,
+	32000,
+	24000,
+	22050,
+	16000,
+	12000,
+	11025,
+	8000,
+	7350,
+}
 
 var (
-	specificBufInvalid = fmt.Errorf("audio mpegspecific error")
-	audioBufInvalid    = fmt.Errorf("audiodata  invalid")
+	specificBufInvalid = errors.New("audio mpegspecific error")
+	audioBufInvalid    = errors.New("audiodata  invalid")
 )
 
 const (
@@ -66,7 +80,7 @@ func (parser *Parser) adts(src []byte, w io.Writer) error {
 
 	frameLen := uint16(len(src)) + 7
 
-	//first write adts header
+	// first write adts header
 	parser.adtsHeader[0] = 0xff
 	parser.adtsHeader[1] = 0xf1
 

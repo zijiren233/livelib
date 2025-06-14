@@ -2,13 +2,32 @@ package amf
 
 import (
 	"bytes"
+	"encoding/json"
 	"fmt"
 	"reflect"
 	"testing"
 	"time"
 )
 
-func EncodeAndDecode(val interface{}, ver Version) (result interface{}, err error) {
+func DumpBytes(label string, buf []byte, size int) {
+	fmt.Printf("Dumping %s (%d bytes):\n", label, size)
+	for i := range size {
+		fmt.Printf("0x%02x ", buf[i])
+	}
+	fmt.Printf("\n")
+}
+
+func Dump(label string, val any) error {
+	json, err := json.MarshalIndent(val, "", "  ")
+	if err != nil {
+		return fmt.Errorf("error dumping %s: %w", label, err)
+	}
+
+	fmt.Printf("Dumping %s:\n%s\n", label, json)
+	return nil
+}
+
+func EncodeAndDecode(val any, ver Version) (result any, err error) {
 	enc := new(Encoder)
 	dec := new(Decoder)
 
@@ -16,18 +35,18 @@ func EncodeAndDecode(val interface{}, ver Version) (result interface{}, err erro
 
 	_, err = enc.Encode(buf, val, ver)
 	if err != nil {
-		return nil, fmt.Errorf("error in encode: %s", err)
+		return nil, fmt.Errorf("error in encode: %w", err)
 	}
 
 	result, err = dec.Decode(buf, ver)
 	if err != nil {
-		return nil, fmt.Errorf("error in decode: %s", err)
+		return nil, fmt.Errorf("error in decode: %w", err)
 	}
 
 	return
 }
 
-func Compare(val interface{}, ver Version, name string, t *testing.T) {
+func Compare(val any, ver Version, name string, t *testing.T) {
 	result, err := EncodeAndDecode(val, ver)
 	if err != nil {
 		t.Errorf("%s: %s", name, err)
@@ -37,7 +56,14 @@ func Compare(val interface{}, ver Version, name string, t *testing.T) {
 		val_v := reflect.ValueOf(val)
 		result_v := reflect.ValueOf(result)
 
-		t.Errorf("%s: comparison failed between %+v (%s) and %+v (%s)", name, val, val_v.Type(), result, result_v.Type())
+		t.Errorf(
+			"%s: comparison failed between %+v (%s) and %+v (%s)",
+			name,
+			val,
+			val_v.Type(),
+			result,
+			result_v.Type(),
+		)
 
 		Dump("expected", val)
 		Dump("got", result)
@@ -115,7 +141,7 @@ func TestAmf0Array(t *testing.T) {
 		t.Errorf("amf0 array conversion failed")
 	}
 
-	for i := 0; i < len(arr); i++ {
+	for i := range arr {
 		if arr[i] != result[i] {
 			t.Errorf("amf0 array %d comparison failed: %v / %v", i, arr[i], result[i])
 		}
@@ -177,7 +203,7 @@ func TestAmf3Array(t *testing.T) {
 		t.Errorf("amf3 array conversion failed: %+v", res)
 	}
 
-	for i := 0; i < len(arr); i++ {
+	for i := range arr {
 		if arr[i] != result[i] {
 			t.Errorf("amf3 array %d comparison failed: %v / %v", i, arr[i], result[i])
 		}

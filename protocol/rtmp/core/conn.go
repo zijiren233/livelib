@@ -221,7 +221,7 @@ func (conn *Conn) readNextChunk() (chunkStream *ChunkStream, err error) {
 		chunkStream.got = true
 	}
 
-	return
+	return chunkStream, err
 }
 
 func (conn *Conn) Write(c *ChunkStream) error {
@@ -271,9 +271,10 @@ func (conn *Conn) NewSetPeerBandwidth(size uint32) *ChunkStream {
 }
 
 func (conn *Conn) handleControlMsg(c *ChunkStream) {
-	if c.TypeID == idSetChunkSize {
+	switch c.TypeID {
+	case idSetChunkSize:
 		atomic.StoreUint32(&conn.remoteChunkSize, binary.BigEndian.Uint32(c.Data))
-	} else if c.TypeID == idWindowAckSize {
+	case idWindowAckSize:
 		atomic.StoreUint32(&conn.remoteWindowAckSize, binary.BigEndian.Uint32(c.Data))
 	}
 }
@@ -284,7 +285,9 @@ func (conn *Conn) ack(size uint32) {
 	if current >= 0xf0000000 {
 		atomic.CompareAndSwapUint32(&conn.ackReceived, current, 0)
 	}
-	if ackReceived := atomic.LoadUint32(&conn.ackReceived); ackReceived >= atomic.LoadUint32(&conn.remoteWindowAckSize) {
+	if ackReceived := atomic.LoadUint32(&conn.ackReceived); ackReceived >= atomic.LoadUint32(
+		&conn.remoteWindowAckSize,
+	) {
 		cs := conn.NewAck(ackReceived)
 		cs.writeChunk(conn.rw, atomic.LoadUint32(&conn.chunkSize))
 		atomic.CompareAndSwapUint32(&conn.ackReceived, ackReceived, 0)
@@ -338,7 +341,7 @@ func (conn *Conn) userControlMsg(eventType, buflen uint32) ChunkStream {
 
 func (conn *Conn) SetBegin() {
 	ret := conn.userControlMsg(streamBegin, 4)
-	for i := 0; i < 4; i++ {
+	for i := range 4 {
 		ret.Data[2+i] = byte(1 >> uint32((3-i)*8) & 0xff)
 	}
 	conn.Write(&ret)
@@ -346,7 +349,7 @@ func (conn *Conn) SetBegin() {
 
 func (conn *Conn) SetRecorded() {
 	ret := conn.userControlMsg(streamIsRecorded, 4)
-	for i := 0; i < 4; i++ {
+	for i := range 4 {
 		ret.Data[2+i] = byte(1 >> uint32((3-i)*8) & 0xff)
 	}
 	conn.Write(&ret)

@@ -1,8 +1,6 @@
 package mp3
 
-import (
-	"fmt"
-)
+import "errors"
 
 type Parser struct {
 	samplingFrequency int
@@ -18,9 +16,10 @@ func NewParser() *Parser {
 // '10' 32 kHz
 // '11' reserved
 var mp3Rates = []int{44100, 48000, 32000}
+
 var (
-	errMp3DataInvalid = fmt.Errorf("mp3data  invalid")
-	errIndexInvalid   = fmt.Errorf("invalid rate index")
+	errMp3DataInvalid = errors.New("mp3data  invalid")
+	errIndexInvalid   = errors.New("invalid rate index")
 )
 
 func (parser *Parser) Parse(src []byte) error {

@@ -150,7 +150,8 @@ func TestEncodeAmf3String(t *testing.T) {
 func TestEncodeAmf3Array(t *testing.T) {
 	enc := new(Encoder)
 	buf := new(bytes.Buffer)
-	expect := []byte{0x09, 0x13, 0x01,
+	expect := []byte{
+		0x09, 0x13, 0x01,
 		0x06, 0x03, '1',
 		0x06, 0x03, '2',
 		0x06, 0x03, '3',

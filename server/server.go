@@ -1,6 +1,7 @@
 package server
 
 import (
+	"context"
 	"errors"
 	"net"
 	"sync/atomic"
@@ -38,9 +39,7 @@ func (s *Server) SetConnBufferSize(bufferSize int32) {
 	atomic.StoreInt32(&s.connBufferSize, bufferSize)
 }
 
-var (
-	ErrAppAlreadyExists = errors.New("app already exists")
-)
+var ErrAppAlreadyExists = errors.New("app already exists")
 
 var ErrAppNotFount = errors.New("app not found")
 
@@ -64,10 +63,10 @@ func (s *Server) handleConn(conn *core.Conn) (err error) {
 	defer connServer.Close()
 
 	if err = connServer.ReadInitMsg(); err != nil {
-		return
+		return err
 	}
 
-	var app, name = connServer.ConnInfo.App, connServer.PublishInfo.Name
+	app, name := connServer.ConnInfo.App, connServer.PublishInfo.Name
 	if s.authFunc == nil {
 		panic("rtmp server auth func not implemented")
 	}
@@ -85,8 +84,8 @@ func (s *Server) handleConn(conn *core.Conn) (err error) {
 		writer := rtmp.NewWriter(connServer)
 		defer writer.Close()
 		channel.AddPlayer(writer)
-		writer.SendPacket()
+		_ = writer.SendPacket(context.Background())
 	}
 
-	return
+	return err
 }

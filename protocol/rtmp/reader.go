@@ -14,8 +14,7 @@ type Reader struct {
 	conn       ChunkReader
 	ReadBWInfo StaticsBW
 
-	closed            uint32
-	loadedFirstPacket bool
+	closed uint32
 }
 
 func NewReader(conn ChunkReader) *Reader {
@@ -75,11 +74,6 @@ func (v *Reader) Read() (p *av.Packet, err error) {
 	p.StreamID = cs.StreamID
 	p.Data = cs.Data
 	p.TimeStamp = cs.Timestamp
-
-	if !v.loadedFirstPacket {
-		v.loadedFirstPacket = true
-		p.First = true
-	}
 
 	v.SaveStatics(p.StreamID, uint64(len(p.Data)), p.IsVideo)
 	return p, v.demuxer.DemuxH(p)
