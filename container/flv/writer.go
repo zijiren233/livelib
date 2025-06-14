@@ -7,7 +7,6 @@ import (
 
 	"github.com/zijiren233/livelib/av"
 	"github.com/zijiren233/livelib/protocol/amf"
-	"github.com/zijiren233/livelib/utils"
 	"github.com/zijiren233/stream"
 )
 
@@ -22,7 +21,6 @@ const (
 )
 
 type Writer struct {
-	t         utils.Timestamp
 	headerBuf []byte
 	w         *stream.Writer
 	inited    bool

@@ -8,11 +8,9 @@ import (
 
 	"github.com/zijiren233/livelib/av"
 	"github.com/zijiren233/livelib/protocol/rtmp/core"
-	"github.com/zijiren233/livelib/utils"
 )
 
 type Writer struct {
-	t           utils.Timestamp
 	conn        ChunkWriter
 	packetQueue chan *av.Packet
 	WriteBWInfo StaticsBW
